@@ -105,8 +105,26 @@ final class SiteAnalyticsTest extends TestCase
         $this->assertSame(3, $bots['total']);
         $this->assertSame(2, $bots['sources']);
         $this->assertSame([['reason' => 'known_bot_user_agent', 'count' => 2], ['reason' => 'webdriver', 'count' => 1]], $bots['reasons']);
-        $this->assertSame(['user_agent' => 'Googlebot/2.1', 'count' => 2], $bots['agents'][0]);
         $this->assertCount(3, $bots['recent']);
+    }
+
+    public function testBotActivityIsGroupedByRobotAndCategory(): void
+    {
+        $chrome = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36';
+        $this->recordBot('known_bot_user_agent', 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)', 'ip-1', 3600);
+        $this->recordBot('known_bot_user_agent', 'Googlebot-Image/1.0', 'ip-2', 1800);
+        $this->recordBot('known_bot_user_agent', 'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; ChatGPT-User/1.0; +https://openai.com/bot)', 'ip-3', 1800);
+        $this->recordBot('client:platform_mismatch', $chrome, 'ip-4', 600);
+        $this->recordBot('internal_traffic', $chrome, 'ip-5', 600);
+
+        $bots = $this->analytics('7d')->botActivity();
+
+        $this->assertSame(1, $bots['internal']);
+        $this->assertSame(['ai_answers' => 1, 'ai_training' => 0, 'search' => 2, 'automated' => 1, 'other' => 0], array_column($bots['categories'], 'count', 'category'));
+        $this->assertSame(['Google' => 2, 'ChatGPT' => 1, 'Chrome · Linux' => 1], array_column($bots['bots'], 'count', 'name'));
+        $this->assertSame(4, array_sum(array_column($bots['series'], 'count')));
+        $this->assertSame('Chrome · Linux', $bots['recent'][1]['bot']['name']);
+        $this->assertNull($bots['recent'][0]['bot']);
     }
 
     private function analytics(string $range): SiteAnalytics

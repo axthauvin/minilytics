@@ -25,6 +25,8 @@ final class UserAgentTest extends TestCase
             'java' => ['Java/17.0.2'],
             'scrapy' => ['Scrapy/2.11.0 (+https://scrapy.org)'],
             'headless chrome' => ['Mozilla/5.0 (X11; Linux x86_64) HeadlessChrome/120.0.0.0 Safari/537.36'],
+            'claude user' => ['Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; Claude-User/1.0; +Claude-User@anthropic.com)'],
+            'perplexity user' => ['Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; Perplexity-User/1.0; +https://perplexity.ai/perplexity-user)'],
         ];
     }
 

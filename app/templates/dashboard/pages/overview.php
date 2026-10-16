@@ -217,6 +217,17 @@
             <div class="breakdown-header-title-group"><h3 class="breakdown-card-title">Blocked bots &amp; internal traffic</h3></div>
             <span id="botCount" class="breakdown-card-sub">0 detections</span>
         </div>
+        <div class="tab-buttons bot-tabs" id="botTabs"></div>
+        <div class="bot-explorer">
+            <div class="bot-chart">
+                <div class="canvas-wrapper">
+                    <canvas id="botsChart" class="chart-canvas"></canvas>
+                    <div id="botsChartTooltip" class="chart-tooltip"></div>
+                </div>
+                <p class="bot-empty pill-muted" id="botsEmpty" hidden></p>
+            </div>
+            <ul class="clean-pill-list bot-robots" id="botRobots"></ul>
+        </div>
         <div id="botsList"><span class="pill-muted">No detected bot traffic for this period.</span></div>
     </section>
     </div> <!-- /#overviewDataContainer -->

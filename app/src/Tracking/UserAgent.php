@@ -19,7 +19,7 @@ final class UserAgent
         if ($this->value === '') {
             return 'missing_user_agent';
         }
-        return preg_match(self::BOT_PATTERN, $this->value) ? 'known_bot_user_agent' : null;
+        return KnownBots::match($this->value) !== null || preg_match(self::BOT_PATTERN, $this->value) ? 'known_bot_user_agent' : null;
     }
 
     public function browser(): string
