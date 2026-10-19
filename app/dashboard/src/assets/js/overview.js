@@ -521,7 +521,7 @@ const OverviewPage = {
 
   inconsistencies: ['no_languages','no_screen','no_chrome_object','mobile_without_touch','platform_mismatch'],
   reasonLabels: {known_bot_user_agent:'Known bot or crawler', missing_user_agent:'Missing user agent', internal_traffic:'Internal traffic', webdriver:'Automated browser'},
-  reasonLabel(reason) { if(String(reason).startsWith('client:')) { const detail=String(reason).slice(7); return (this.inconsistencies.includes(detail)?'Inconsistent browser (':'Automated browser (')+detail.replace(/_/g,' ')+')'; } return this.reasonLabels[reason] || String(reason).replace(/_/g,' ').replace(/^./,c=>c.toUpperCase()); },
+  reasonLabel(reason) { if(reason==='client:no_interaction') return 'Left without interacting'; if(String(reason).startsWith('client:')) { const detail=String(reason).slice(7); return (this.inconsistencies.includes(detail)?'Inconsistent browser (':'Automated browser (')+detail.replace(/_/g,' ')+')'; } return this.reasonLabels[reason] || String(reason).replace(/_/g,' ').replace(/^./,c=>c.toUpperCase()); },
   bars(rows, key, label) {
     const top=Math.max(1,...rows.map(r=>r.count));
     return rows.length?rows.map(r=>`<div class="bot-bar"><div class="bot-bar-fill" style="width:${Math.round(r.count/top*100)}%"></div><span class="bot-bar-label" title="${this.escapeHtml(r[key])}">${this.escapeHtml(label?label(r[key]):r[key])}</span><strong>${r.count}</strong></div>`).join(''):'<span class="pill-muted">No data</span>';

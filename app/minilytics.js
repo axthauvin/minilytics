@@ -10,11 +10,18 @@
             : "/track.php");
     var autoTrack =
         !script || script.getAttribute("data-auto-track") !== "false";
-    // Real visitors move, scroll, touch or type. Events are held back until the
-    // first such interaction, which keeps scripts that merely load the page out.
+    // Real visitors move, scroll, touch, type, or at least look at the page.
+    // Events are held back until the first interaction or until the page has
+    // been visible for VISIBLE_MS, which keeps out scripts that merely load the
+    // page, prerendered pages and tabs opened in the background.
     var requireInteraction =
         !script || script.getAttribute("data-require-interaction") !== "false";
+    var VISIBLE_MS = 3000;
     var interacted = false,
+        visibleMs = 0,
+        visibleSince = null,
+        visibleTimer = null,
+        seen = false,
         pendingPageview = null,
         pendingEvents = [];
     var debug = !!script && script.getAttribute("data-debug") === "true";
@@ -254,11 +261,15 @@
     ];
     function onInteraction(e) {
         if (interacted || !e.isTrusted) return;
+        confirmVisitor("First interaction detected, sending the held events.");
+    }
+    function confirmVisitor(message) {
         interacted = true;
+        clearTimeout(visibleTimer);
         INTERACTION_EVENTS.forEach(function (type) {
             removeEventListener(type, onInteraction, true);
         });
-        reportDebug("First interaction detected, sending the held events.", {
+        reportDebug(message, {
             pageview: !!pendingPageview,
             events: pendingEvents.length,
         });
@@ -273,13 +284,47 @@
             send(event.name, event.data);
         });
     }
-    if (requireInteraction)
+    function pageVisible() {
+        if (document.prerendering) return false;
+        return document.visibilityState
+            ? document.visibilityState === "visible"
+            : !document.hidden;
+    }
+    // Adds up the time the page is actually on screen, and confirms the
+    // visitor once it reaches VISIBLE_MS even if they never interact.
+    function onVisibilityChange() {
+        if (interacted) return;
+        var now = Date.now();
+        if (visibleSince !== null) visibleMs += now - visibleSince;
+        visibleSince = null;
+        clearTimeout(visibleTimer);
+        if (!pageVisible()) return;
+        seen = true;
+        visibleSince = now;
+        visibleTimer = setTimeout(function () {
+            if (!interacted && pageVisible())
+                confirmVisitor(
+                    "Page visible long enough, sending the held events.",
+                );
+        }, Math.max(0, VISIBLE_MS - visibleMs));
+    }
+    if (requireInteraction) {
         INTERACTION_EVENTS.forEach(function (type) {
             addEventListener(type, onInteraction, {
                 capture: true,
                 passive: true,
             });
         });
+        document.addEventListener("visibilitychange", onVisibilityChange);
+        document.addEventListener("prerenderingchange", onVisibilityChange);
+        // A page seen but left before either signal is not counted, but is
+        // logged so that the dashboard shows how many visits this leaves out.
+        addEventListener("pagehide", function () {
+            if (!interacted && seen && pendingPageview)
+                reportBot("no_interaction");
+        });
+        onVisibilityChange();
+    }
     function send(name, data) {
         if (requireInteraction && !interacted && siteId && siteKey) {
             // Only the latest page view matters; other events are kept in order.

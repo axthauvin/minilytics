@@ -41,9 +41,9 @@ Your events then appear on the **Events** page of the dashboard.
 As with any analytics tool, you want to count only real visitors, not automated programs. Minilytics tries to ignore robots in two ways.
 
 - **Using the user agent:** Crawlers, link previews and scripts such as `curl` announce themselves in their user agent, and automated browsers give themselves away to the tracking script. Minilytics recognises both and ignores them.
-- **What the visitor does:** A real visitor moves the mouse, scrolls, touches the screen or presses a key. Minilytics only sends a page view after the first of these, so a program that merely loads a page is never counted.
+- **What the visitor does:** A real visitor moves the mouse, scrolls, touches the screen or presses a key, or at least looks at the page. Minilytics only sends a page view after the first of these, or once the page has been on screen for 3 seconds, so a program that merely loads a page, a page preloaded by the browser or a tab left in the background is never counted.
 
-The visits that were ignored are listed at the bottom of the **Overview** page, with the reason why. Nothing about them is added to your statistics.
+The visits that were ignored are listed at the bottom of the **Overview** page, with the reason why. Visitors who left in under 3 seconds without interacting appear there as *Left without interacting*. Nothing about them is added to your statistics.
 Of course, thoses methods are not perfect and some robots can still be counted, we apologize for that and we are working on improving our detection methods. 
 
 If you prefer to count every page load anyway, add `data-require-interaction="false"` to the snippet.
