@@ -36,6 +36,7 @@ final class ConnectionsTest extends TestCase
 
         $this->assertSame('session-1', $db->querySingle('SELECT visitor_id FROM user_activity'));
         $this->assertSame(1, $db->querySingle('SELECT COUNT(*) FROM bot_activity WHERE country_code IS NULL'));
+        $this->assertGreaterThan(0, $db->querySingle('PRAGMA user_version'), 'the upgrade only runs once');
         $this->assertSame('idx_ua_visitor', $db->querySingle("SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_ua_visitor'"));
     }
 

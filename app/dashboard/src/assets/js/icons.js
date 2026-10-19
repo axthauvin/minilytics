@@ -399,6 +399,10 @@ const Icons = {
       return `<span class="country-flag-unknown ${className}" title="Unknown">🌐</span>`;
     }
     const code = String(countryCode).toLowerCase().trim();
+    // The code ends up in a URL and in markup: only ISO 3166 alpha-2 codes are used.
+    if (!/^[a-z]{2}$/.test(code)) {
+      return `<span class="country-flag-unknown ${className}" title="Unknown">🌐</span>`;
+    }
     const width = Math.round(size * 1.33);
     return `<span class="country-flag-wrap ${className}" title="${code.toUpperCase()}"><img src="https://flagcdn.com/${code}.svg" alt="${code.toUpperCase()}" class="country-flag-img" width="${width}" height="${size}" loading="lazy" onerror="this.onerror=null; this.outerHTML='<span class=\\'fi fi-${code}\\'></span>';" /></span>`;
   },

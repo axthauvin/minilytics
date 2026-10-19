@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Minilytics\Analytics\Reports;
 
 use Minilytics\Analytics\ReportQuery;
+use Minilytics\Database\Schema;
 use Minilytics\Tracking\KnownBots;
 
 /** Requests rejected as bot traffic. */
@@ -24,7 +25,6 @@ final class BotsReport
      *
      * @return array{
      *     total: int,
-     *     sources: int,
      *     internal: int,
      *     left: int,
      *     reasons: list<array{reason: string, count: int}>,
@@ -37,10 +37,9 @@ final class BotsReport
      */
     public function summary(): array
     {
-        $totals = $this->rows('SELECT COUNT(*) AS total, COUNT(DISTINCT ip_hash) AS sources FROM bot_activity WHERE timestamp BETWEEN :start AND :end')[0] ?? [];
+        $totals = $this->rows('SELECT COUNT(*) AS total FROM bot_activity WHERE timestamp BETWEEN :start AND :end')[0] ?? [];
         return [
             'total' => (int) ($totals['total'] ?? 0),
-            'sources' => (int) ($totals['sources'] ?? 0),
             'reasons' => $this->top('reason'),
             'origins' => $this->top('origin'),
             'recent' => $this->recent(),
@@ -50,7 +49,8 @@ final class BotsReport
     /** The 50 most recent requests rejected as bot traffic, with the robot that sent them and its country. */
     public function recent(): array
     {
-        $rows = $this->rows('SELECT reason, user_agent, origin, country_code, timestamp FROM bot_activity WHERE timestamp BETWEEN :start AND :end ORDER BY id DESC LIMIT 50');
+        $country = Schema::hasBotCountry($this->query->db) ? 'country_code' : 'NULL AS country_code';
+        $rows = $this->rows("SELECT reason, user_agent, origin, {$country}, timestamp FROM bot_activity WHERE timestamp BETWEEN :start AND :end ORDER BY id DESC LIMIT 50");
         return array_map(static fn(array $row): array => $row + [
             'bot' => isset(self::NOT_ROBOTS[$row['reason']]) ? null : KnownBots::identify((string) $row['user_agent'], (string) $row['reason']),
         ], $rows);

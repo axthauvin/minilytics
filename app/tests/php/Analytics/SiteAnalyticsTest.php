@@ -103,7 +103,6 @@ final class SiteAnalyticsTest extends TestCase
         $bots = $this->analytics('7d')->botActivity();
 
         $this->assertSame(3, $bots['total']);
-        $this->assertSame(2, $bots['sources']);
         $this->assertSame([['reason' => 'known_bot_user_agent', 'count' => 2], ['reason' => 'webdriver', 'count' => 1]], $bots['reasons']);
         $this->assertCount(3, $bots['recent']);
     }
