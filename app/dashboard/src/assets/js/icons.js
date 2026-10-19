@@ -58,6 +58,8 @@ const Icons = {
     "layout-grid": '<rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/>',
     "key-round": '<path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/>',
     "arrow-up-right": '<path d="M7 7h10v10"/><path d="M7 17 17 7"/>',
+    search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+    bot: '<path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/>',
     plug: '<path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/>',
   },
 
@@ -397,6 +399,10 @@ const Icons = {
       return `<span class="country-flag-unknown ${className}" title="Unknown">🌐</span>`;
     }
     const code = String(countryCode).toLowerCase().trim();
+    // The code ends up in a URL and in markup: only ISO 3166 alpha-2 codes are used.
+    if (!/^[a-z]{2}$/.test(code)) {
+      return `<span class="country-flag-unknown ${className}" title="Unknown">🌐</span>`;
+    }
     const width = Math.round(size * 1.33);
     return `<span class="country-flag-wrap ${className}" title="${code.toUpperCase()}"><img src="https://flagcdn.com/${code}.svg" alt="${code.toUpperCase()}" class="country-flag-img" width="${width}" height="${size}" loading="lazy" onerror="this.onerror=null; this.outerHTML='<span class=\\'fi fi-${code}\\'></span>';" /></span>`;
   },

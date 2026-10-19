@@ -30,6 +30,12 @@ class MinilyticsChart {
         this.hideZeroTooltipMetrics = options.hideZeroTooltipMetrics === true;
         this.lockTooltipOnClick = options.lockTooltipOnClick === true;
         this.highlightAnomalies = options.highlightAnomalies === true;
+        // Lighter look for small multi-line charts: dashed grid, no dot on the last point.
+        this.gridLines = options.gridLines || 3;
+        this.gridDash = options.gridDash || [];
+        this.markLastPoint = options.markLastPoint !== false;
+        // The Y axis goes at least this high, so that a handful of events does not fill the chart.
+        this.minScale = options.minScale || 8;
 
         const defaultSeriesConfig = {
             pageviews: {
@@ -311,7 +317,7 @@ class MinilyticsChart {
         this.activeSeries.forEach(k => {
             this.data.forEach(d => allActiveValues.push(Number(d[k]) || 0));
         });
-        let maxVal = Math.max(...allActiveValues, 8);
+        let maxVal = Math.max(...allActiveValues, this.minScale);
         const roundStep = maxVal > 100 ? 50 : (maxVal > 50 ? 20 : (maxVal > 20 ? 10 : 4));
         maxVal = Math.ceil(maxVal / roundStep) * roundStep;
 
@@ -361,7 +367,7 @@ class MinilyticsChart {
             this.data.forEach(d => allActiveValues.push(Number(d[k]) || 0));
         });
 
-        let maxVal = Math.max(...allActiveValues, 8);
+        let maxVal = Math.max(...allActiveValues, this.minScale);
         const roundStep = maxVal > 100 ? 50 : (maxVal > 50 ? 20 : (maxVal > 20 ? 10 : 4));
         maxVal = Math.ceil(maxVal / roundStep) * roundStep;
 
@@ -372,8 +378,10 @@ class MinilyticsChart {
         const stepX = plotWidth / Math.max(1, this.data.length - 1);
 
         // 2. Subtle horizontal grid lines & Y-axis numbers
-        const gridLines = 3;
-        ctx.strokeStyle = '#f1f5f9';
+        const gridLines = this.gridLines;
+        ctx.save();
+        ctx.setLineDash(this.gridDash);
+        ctx.strokeStyle = this.gridDash.length ? '#e2e8f0' : '#f1f5f9';
         ctx.lineWidth = 1;
         ctx.fillStyle = '#94a3b8';
         ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
@@ -391,9 +399,10 @@ class MinilyticsChart {
 
             ctx.fillText(val.toLocaleString(), plotX - 8, y);
         }
+        ctx.restore();
 
         // 3. Draw dashed vertical crosshair if hovering
-        const activeIdx = this.hoveredIndex >= 0 ? this.hoveredIndex : (this.data.length > 3 ? this.data.length - 1 : -1);
+        const activeIdx = this.hoveredIndex >= 0 ? this.hoveredIndex : (this.markLastPoint && this.data.length > 3 ? this.data.length - 1 : -1);
         if (activeIdx >= 0 && activeIdx < this.data.length && this.hoveredIndex >= 0) {
             const crosshairX = this.chartType === 'bar'
                 ? plotX + (activeIdx + 0.5) * (plotWidth / this.data.length)
@@ -526,7 +535,9 @@ class MinilyticsChart {
                 ? plotX + (i + 0.5) * (plotWidth / this.data.length)
                 : plotX + i * stepX;
             const label = this.data[i].label || '';
-            ctx.fillText(label, ptX, plotY + plotHeight + 10);
+            // Keep the first and last labels inside the canvas.
+            const half = ctx.measureText(label).width / 2;
+            ctx.fillText(label, Math.min(Math.max(ptX, half + 2), this.width - half - 2), plotY + plotHeight + 10);
         }
     }
 

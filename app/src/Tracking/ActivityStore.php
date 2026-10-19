@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Minilytics\Tracking;
 
 use Minilytics\Database\DatabaseConnection;
+use Minilytics\Database\Schema;
 
 /** Writes tracked and ignored events to a website's database. */
 final class ActivityStore
@@ -34,14 +35,25 @@ final class ActivityStore
         $stmt->execute();
     }
 
-    /** Logs a request kept out of the analytics (bot, internal traffic). Only a hash of the IP is stored. */
-    public function recordIgnored(string $reason, string $userAgent, string $origin, string $ip): void
+    /**
+     * Logs a request kept out of the analytics (bot, internal traffic). Only a
+     * hash of the IP is stored, with the country it comes from.
+     */
+    public function recordIgnored(string $reason, string $userAgent, string $origin, string $ip, ?string $countryCode = null): void
     {
-        $stmt = $this->db->prepare('INSERT INTO bot_activity (reason, user_agent, origin, ip_hash) VALUES (:reason,:ua,:origin,:ip)');
+        // Without the column (an account that cannot alter tables), the request is kept without its country.
+        $located = Schema::hasBotCountry($this->db);
+        $stmt = $this->db->prepare($located
+            ? 'INSERT INTO bot_activity (reason, user_agent, origin, ip_hash, country_code) VALUES (:reason,:ua,:origin,:ip,:country)'
+            : 'INSERT INTO bot_activity (reason, user_agent, origin, ip_hash) VALUES (:reason,:ua,:origin,:ip)');
         $stmt->bindValue(':reason', $reason, SQLITE3_TEXT);
         $stmt->bindValue(':ua', substr($userAgent, 0, 500), SQLITE3_TEXT);
         $stmt->bindValue(':origin', substr($origin, 0, 255), SQLITE3_TEXT);
         $stmt->bindValue(':ip', hash('sha256', $ip), SQLITE3_TEXT);
+        if ($located) {
+            $country = $countryCode !== null && $countryCode !== 'UN' ? $countryCode : null;
+            $stmt->bindValue(':country', $country, $country === null ? SQLITE3_NULL : SQLITE3_TEXT);
+        }
         $stmt->execute();
     }
 }
