@@ -22,6 +22,16 @@ const OverviewPage = {
       sortTooltipMetrics: true,
       hideZeroTooltipMetrics: true,
       seriesConfig: {},
+      gridLines: 4,
+      gridDash: [4, 4],
+      markLastPoint: false,
+      minScale: 4,
+    });
+    document.getElementById("botSideTabs")?.addEventListener("click", (e) => {
+      const btn = e.target.closest(".chart-toggle-btn");
+      if (!btn) return;
+      this.activeBotSide = btn.dataset.side;
+      this.renderBotSide();
     });
     document.getElementById("botTabs")?.addEventListener("click", (e) => {
       const btn = e.target.closest(".chart-toggle-btn");
@@ -533,7 +543,7 @@ const OverviewPage = {
 
   inconsistencies: ['no_languages','no_screen','no_chrome_object','mobile_without_touch','platform_mismatch'],
   reasonLabels: {known_bot_user_agent:'Known bot or crawler', missing_user_agent:'Missing user agent', internal_traffic:'Internal traffic', webdriver:'Automated browser'},
-  reasonLabel(reason) { if(reason==='client:no_interaction') return 'Left without interacting'; if(String(reason).startsWith('client:')) { const detail=String(reason).slice(7); return (this.inconsistencies.includes(detail)?'Inconsistent browser (':'Automated browser (')+detail.replace(/_/g,' ')+')'; } return this.reasonLabels[reason] || String(reason).replace(/_/g,' ').replace(/^./,c=>c.toUpperCase()); },
+  reasonLabel(reason) { if(reason==='client:no_interaction') return 'Left without interacting'; if(String(reason).startsWith('client:')) { const detail=String(reason).slice(7).replace(/^[_$]+/,''); return (this.inconsistencies.includes(detail)?'Inconsistent browser (':'Automated browser (')+detail.replace(/_/g,' ')+')'; } return this.reasonLabels[reason] || String(reason).replace(/_/g,' ').replace(/^./,c=>c.toUpperCase()); },
   bars(rows, key, label) {
     const top=Math.max(1,...rows.map(r=>r.count));
     return rows.length?rows.map(r=>`<div class="bot-bar"><div class="bot-bar-fill" style="width:${Math.round(r.count/top*100)}%"></div><span class="bot-bar-label" title="${this.escapeHtml(r[key])}">${this.escapeHtml(label?label(r[key]):r[key])}</span><strong>${r.count}</strong></div>`).join(''):'<span class="pill-muted">No data</span>';
@@ -548,12 +558,12 @@ const OverviewPage = {
   },
   // Robot categories, as grouped by KnownBots on the server.
   botCategories: [
-    { key: "ai_answers", label: "AI answers", empty: "No AI assistant opened your pages in this period." },
-    { key: "ai_training", label: "AI training", empty: "No AI training crawler was seen in this period." },
-    { key: "search", label: "Search", empty: "No search engine was seen in this period." },
-    { key: "automated", label: "Automated browsers", empty: "No automated browser was caught in this period." },
-    { key: "other", label: "Other", empty: "No other robot was seen in this period." },
+    { key: "search", label: "Search engines", icon: "search" },
+    { key: "automated", label: "Automated browsers", icon: "bot" },
+    { key: "other", label: "Other robots", icon: "globe" },
   ],
+  // What the side panel lists for the selected category: its robots or why they were blocked.
+  activeBotSide: "robots",
   activeBotTab: null,
   // Robots plotted on the chart, the most frequent of the selected category.
   BOT_LINES: 5,
@@ -565,65 +575,111 @@ const OverviewPage = {
     this.currentBots = bots;
     const total=bots.total||0, recent=(bots.recent||[]).slice(0,10);
     document.getElementById('botCount').textContent=`${total} detection${total===1?'':'s'}`;
-    const robots=total-(bots.internal||0);
+    const robots=total-(bots.internal||0)-(bots.left||0);
     document.getElementById('botTabs').hidden=!robots;
     card.querySelector('.bot-explorer').hidden=!robots;
     const panel=document.getElementById('botsList');
     if(!total){ panel.innerHTML='<span class="pill-muted">No detected bot traffic for this period.</span>'; return; }
     if(robots) {
       const counts=Object.fromEntries((bots.categories||[]).map(c=>[c.category,c.count]));
-      if(!counts[this.activeBotTab]) this.activeBotTab=this.botCategories.find(c=>counts[c.key])?.key;
+      if(!counts[this.activeBotTab]) this.activeBotTab=[...(bots.categories||[])].sort((a,b)=>b.count-a.count)[0]?.category;
       this.renderBotTabs();
       this.renderBotCategory();
     }
+    // What the tabs leave out: people kept out of the statistics, and the websites when there are several.
+    const notes=[['Internal traffic',bots.internal],['Left without interacting',bots.left]].filter(([,count])=>count).map(([label,count])=>`<span>${label} <strong>${count.toLocaleString()}</strong></span>`);
     const origins=bots.origins||[];
-    panel.innerHTML=`<div class="bot-columns"><div><h4>Why they were blocked</h4>${this.bars(bots.reasons||[],'reason',r=>this.reasonLabel(r))}</div>${origins.length>1?`<div><h4>Targeted websites</h4>${this.bars(origins,'origin')}</div>`:''}</div>
-      <button type="button" class="bot-latest-toggle" aria-expanded="false">${Icons.get("chevron-right",{size:14})}<span>Latest requests</span></button><div class="bot-list" hidden>${recent.map(b=>`<div class="bot-row"><strong>${this.escapeHtml(b.bot?b.bot.name:'Internal traffic')}</strong><span title="${this.escapeHtml(b.user_agent||'')}">${this.escapeHtml(this.reasonLabel(b.reason))}</span><time>${this.escapeHtml(b.timestamp)}</time></div>`).join('')}</div>`;
+    if(origins.length>1) notes.push(`<span>Websites: ${origins.map(o=>`${this.escapeHtml(o.origin)} <strong>${o.count.toLocaleString()}</strong>`).join(' · ')}</span>`);
+    panel.innerHTML=`${notes.length?`<div class="bot-notes">${robots?'Not robots: ':''}${notes.join('')}</div>`:''}
+      <button type="button" class="bot-latest-toggle" aria-expanded="false">${Icons.get("chevron-right",{size:14})}<span>Latest requests</span></button><div class="bot-list" hidden>${recent.map(b=>this.botRequestRow(b)).join('')}</div>`;
     panel.querySelector('.bot-latest-toggle').addEventListener('click', e => this.toggleBotRequests(e.currentTarget));
   },
 
+  /** One tab per category with requests in this period, the busiest first. */
   renderBotTabs() {
-    const counts=Object.fromEntries((this.currentBots?.categories||[]).map(c=>[c.category,c.count]));
-    document.getElementById('botTabs').innerHTML=this.botCategories.map(c=>`<button type="button" class="chart-toggle-btn${c.key===this.activeBotTab?' active':''}${counts[c.key]?'':' is-empty'}" data-tab="${c.key}">${c.label}<span class="bot-tab-count">${(counts[c.key]||0).toLocaleString()}</span></button>`).join('');
+    const categories=[...(this.currentBots?.categories||[])].filter(c=>c.count).sort((a,b)=>b.count-a.count);
+    document.getElementById('botTabs').innerHTML=categories.map(c=>{ const k=this.botCategories.find(k=>k.key===c.category); return `<button type="button" class="chart-toggle-btn${c.category===this.activeBotTab?' active':''}" data-tab="${c.category}">${Icons.get(k?.icon||'bot',{size:14})}${k?.label||c.category}<span class="bot-tab-count">${c.count.toLocaleString()}</span></button>`; }).join('');
   },
 
-  /** The robots of the selected category: one line each on the chart, and their list. */
+  /** The selected category: one line per robot on the chart, its robots and why they were blocked. */
   renderBotCategory() {
-    const bots=this.currentBots, category=this.botCategories.find(c=>c.key===this.activeBotTab);
+    const bots=this.currentBots, category=(bots?.categories||[]).find(c=>c.category===this.activeBotTab);
     if(!bots||!category) return;
-    const robots=(bots.bots||[]).filter(b=>b.category===category.key);
+    const robots=(bots.bots||[]).filter(b=>b.category===category.category);
     const plotted=robots.slice(0,this.BOT_LINES);
-    const total=robots.reduce((sum,b)=>sum+b.count,0)||1;
+    const top=Math.max(1,...robots.map(b=>b.count));
 
-    document.getElementById('botRobots').innerHTML=robots.map((b,i)=>`
-      <li class="clean-pill-row">
-        <div class="pill-progress-bg" style="width:${Math.round(b.count/total*100)}%;"></div>
-        <div class="pill-left">${this.botIcon(b)}<span class="pill-title" title="${this.escapeHtml(b.operator?`${b.name} · ${b.operator}`:b.name)}">${this.escapeHtml(b.name)}</span>${b.operator&&b.operator!==b.name?`<span class="bot-operator">${this.escapeHtml(b.operator)}</span>`:''}</div>
-        <div class="pill-right">${i<plotted.length?`<span class="metric-color-dot" style="background:${this.BOT_PALETTE[i]}"></span>`:''}<span class="pill-stat">${b.count.toLocaleString()}</span></div>
-      </li>`).join('');
-
-    const empty=document.getElementById('botsEmpty'), wrapper=document.querySelector('.bot-chart .canvas-wrapper');
-    empty.hidden=robots.length>0;
-    wrapper.hidden=!robots.length;
-    if(!robots.length) {
-      const hint=category.key.startsWith('ai_')?' Most AI crawlers do not run JavaScript, so the tracking script rarely sees them.':'';
-      empty.textContent=category.empty+hint;
-      return;
-    }
+    document.getElementById('botRobots').innerHTML=robots.map((b,i)=>`<div class="bot-bar" title="${this.escapeHtml(b.operator?`${b.name} · ${b.operator}`:b.name)}"><div class="bot-bar-fill" style="width:${Math.round(b.count/top*100)}%"></div><span class="bot-bar-label">${this.botIcon(b)}<span class="bot-bar-name">${this.escapeHtml(b.name)}</span>${b.operator&&b.operator!==b.name?`<span class="bot-operator">${this.escapeHtml(b.operator)}</span>`:''}</span><span class="bot-bar-count">${i<plotted.length?`<span class="metric-color-dot" style="background:${this.BOT_PALETTE[i]}"></span>`:''}<strong>${b.count.toLocaleString()}</strong></span></div>`).join('');
+    document.getElementById('botReasons').innerHTML=this.botReasons(category.reasons||[]);
+    this.renderBotSide();
 
     // Bucket the hourly counts into the main chart's slots.
     const points=this.localizeHourlyChartLabels(this.currentData?.timeseries||[]).map(p=>({timestamp:p.timestamp,interval_hours:p.interval_hours,label:p.label,date_label:p.date_label,full_label:p.full_label}));
     const keys=new Map(plotted.map((b,i)=>[b.name,`bot${i}`]));
     points.forEach(p=>keys.forEach(key=>{ p[key]=0; }));
     for(const s of bots.series||[]) {
-      const key=s.category===category.key&&keys.get(s.name);
+      const key=s.category===category.category&&keys.get(s.name);
       if(!key) continue;
       let slot=-1;
       while(slot+1<points.length&&Number(points[slot+1].timestamp)<=s.time) slot++;
       if(slot>=0) points[slot][key]+=s.count;
     }
-    this.botsChart.seriesConfig=Object.fromEntries(plotted.map((b,i)=>[`bot${i}`,{key:`bot${i}`,label:b.name,singular:'request',color:this.BOT_PALETTE[i],gradientStart:'rgba(255, 255, 255, 0)',gradientEnd:'rgba(255, 255, 255, 0)',lineWidth:2.4}]));
+    this.botsChart.seriesConfig=Object.fromEntries(plotted.map((b,i)=>[`bot${i}`,{key:`bot${i}`,label:b.name,singular:'request',color:this.BOT_PALETTE[i],gradientStart:'rgba(255, 255, 255, 0)',gradientEnd:'rgba(255, 255, 255, 0)',lineWidth:1.75}]));
     this.botsChart.setData(points,[...keys.values()]);
+  },
+
+  // What each rejection reason means, in a few words.
+  reasonHints: {
+    known_bot_user_agent: ['Bot user agent', 'Its user agent names a crawler or a script.'],
+    internal_traffic: ['Internal traffic', 'A visit from one of your internal IP addresses.'],
+    'client:no_interaction': ['Left without interacting', 'Left in under 3 seconds without moving, scrolling or typing.'],
+    missing_user_agent: ['No user agent', 'The request did not say which browser sent it.'],
+    'client:webdriver': ['Webdriver', 'The browser says it is driven by a script.'],
+    'client:no_screen': ['No screen', 'The browser reports a 0×0 screen.'],
+    'client:no_languages': ['No languages', 'The browser reports no language at all.'],
+    'client:no_chrome_object': ['Fake Chrome', 'A desktop Chrome user agent without Chrome itself.'],
+    'client:mobile_without_touch': ['Phone without touch', 'A phone user agent on a device without touch.'],
+    'client:platform_mismatch': ['Wrong platform', 'The user agent and the system it runs on disagree.'],
+  },
+  reasonHint(reason) {
+    if(this.reasonHints[reason]) return this.reasonHints[reason];
+    const tool=String(reason).replace(/^client:/,'').replace(/^[_$]+/,'').replace(/_/g,' ');
+    return [tool.replace(/^./,c=>c.toUpperCase()), `The page found traces of an automation tool (${tool}).`];
+  },
+
+  /** The reasons of the selected category, each with what it means. */
+  botReasons(reasons) {
+    const top=Math.max(1,...reasons.map(r=>r.count));
+    return reasons.map(r=>{
+      const [title,hint]=this.reasonHint(r.reason);
+      return `<div class="bot-reason">
+        <span class="bot-reason-text"><strong>${this.escapeHtml(title)}</strong><small>${this.escapeHtml(hint)}</small></span>
+        <span class="bot-reason-count">${r.count.toLocaleString()}</span>
+        <span class="bot-reason-meter"><span style="width:${Math.round(r.count/top*100)}%"></span></span>
+      </div>`;
+    }).join('');
+  },
+
+  countryName(code) {
+    try { this.regionNames ??= new Intl.DisplayNames('en',{type:'region'}); return this.regionNames.of(code)||code; } catch { return code; }
+  },
+
+  /** A rejected request: who sent it and why, its user agent, country and time. */
+  botRequestRow(b) {
+    const name=b.bot?b.bot.name:(b.reason==='internal_traffic'?'Internal traffic':'Visitor');
+    const country=b.country_code?`${Icons.getCountryFlag(b.country_code,{size:14})}<span>${this.escapeHtml(this.countryName(b.country_code))}</span>`:'<span class="pill-muted">Unknown</span>';
+    return `<div class="bot-row">
+      <div class="bot-row-who"><strong>${this.escapeHtml(name)}</strong><small>${this.escapeHtml(this.reasonHint(b.reason)[0])}</small></div>
+      <code class="bot-row-agent" title="${this.escapeHtml(b.user_agent||'')}">${this.escapeHtml(b.user_agent||'No user agent')}</code>
+      <div class="bot-row-country">${country}</div>
+      <time>${this.escapeHtml(b.timestamp)}</time>
+    </div>`;
+  },
+
+  renderBotSide() {
+    document.querySelectorAll('#botSideTabs .chart-toggle-btn').forEach(btn=>btn.classList.toggle('active',btn.dataset.side===this.activeBotSide));
+    document.getElementById('botRobots').hidden=this.activeBotSide!=='robots';
+    document.getElementById('botReasons').hidden=this.activeBotSide!=='reasons';
   },
 
   botIcon(bot) {

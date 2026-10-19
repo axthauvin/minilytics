@@ -15,6 +15,9 @@ final class BotsReport
     /** Robots listed per category on the dashboard. */
     private const BOTS_PER_CATEGORY = 10;
 
+    /** Rejected requests that came from people, not robots. */
+    private const NOT_ROBOTS = ['internal_traffic' => 'internal', 'client:no_interaction' => 'left'];
+
     /**
      * Overview of the rejected requests: totals, why they were rejected, which
      * robots sent them (see KnownBots), when, and the most recent ones.
@@ -23,8 +26,9 @@ final class BotsReport
      *     total: int,
      *     sources: int,
      *     internal: int,
+     *     left: int,
      *     reasons: list<array{reason: string, count: int}>,
-     *     categories: list<array{category: string, count: int}>,
+     *     categories: list<array{category: string, count: int, reasons: list<array{reason: string, count: int}>}>,
      *     bots: list<array{name: string, operator: string, domain: string, category: string, count: int}>,
      *     series: list<array{time: int, category: string, name: string, count: int}>,
      *     origins: list<array{origin: string, count: int}>,
@@ -43,35 +47,38 @@ final class BotsReport
         ] + $this->robots();
     }
 
-    /** The 50 most recent requests rejected as bot traffic, with the robot that sent them. */
+    /** The 50 most recent requests rejected as bot traffic, with the robot that sent them and its country. */
     public function recent(): array
     {
-        $rows = $this->rows('SELECT reason, user_agent, origin, timestamp FROM bot_activity WHERE timestamp BETWEEN :start AND :end ORDER BY id DESC LIMIT 50');
+        $rows = $this->rows('SELECT reason, user_agent, origin, country_code, timestamp FROM bot_activity WHERE timestamp BETWEEN :start AND :end ORDER BY id DESC LIMIT 50');
         return array_map(static fn(array $row): array => $row + [
-            'bot' => $row['reason'] === 'internal_traffic' ? null : KnownBots::identify((string) $row['user_agent'], (string) $row['reason']),
+            'bot' => isset(self::NOT_ROBOTS[$row['reason']]) ? null : KnownBots::identify((string) $row['user_agent'], (string) $row['reason']),
         ], $rows);
     }
 
     /**
      * The rejected requests grouped by robot and by category, with an hourly
-     * series per robot. Internal traffic is counted apart: it is not a robot.
+     * series per robot. Internal traffic and visitors who left without
+     * interacting are counted apart: they are people.
      *
-     * @return array{internal: int, categories: list<array{category: string, count: int}>, bots: list<array<string, mixed>>, series: list<array{time: int, category: string, name: string, count: int}>}
+     * @return array{internal: int, left: int, categories: list<array{category: string, count: int, reasons: list<array{reason: string, count: int}>}>, bots: list<array<string, mixed>>, series: list<array{time: int, category: string, name: string, count: int}>}
      */
     private function robots(): array
     {
         $categories = array_fill_keys(KnownBots::CATEGORIES, 0);
+        $reasons = array_fill_keys(KnownBots::CATEGORIES, []);
         $bots = $series = [];
-        $internal = 0;
+        $people = ['internal' => 0, 'left' => 0];
         foreach ($this->rows("SELECT reason, user_agent, strftime('%Y-%m-%d %H:00:00', timestamp) AS hour, COUNT(*) AS count FROM bot_activity WHERE timestamp BETWEEN :start AND :end GROUP BY reason, user_agent, hour") as $row) {
             $count = (int) $row['count'];
-            if ($row['reason'] === 'internal_traffic') {
-                $internal += $count;
+            if (isset(self::NOT_ROBOTS[$row['reason']])) {
+                $people[self::NOT_ROBOTS[$row['reason']]] += $count;
                 continue;
             }
             $bot = KnownBots::identify((string) $row['user_agent'], (string) $row['reason']);
             $category = $bot['category'];
             $categories[$category] += $count;
+            $reasons[$category][$row['reason']] = ($reasons[$category][$row['reason']] ?? 0) + $count;
             $key = $category . '|' . $bot['name'];
             $bots[$key] ??= $bot + ['count' => 0];
             $bots[$key]['count'] += $count;
@@ -87,9 +94,15 @@ final class BotsReport
         }));
         ksort($series);
 
-        return [
-            'internal' => $internal,
-            'categories' => array_map(static fn(string $category): array => ['category' => $category, 'count' => $categories[$category]], KnownBots::CATEGORIES),
+        return $people + [
+            'categories' => array_map(static function (string $category) use ($categories, $reasons): array {
+                arsort($reasons[$category]);
+                return [
+                    'category' => $category,
+                    'count' => $categories[$category],
+                    'reasons' => array_map(static fn(string $reason, int $count): array => ['reason' => $reason, 'count' => $count], array_map('strval', array_keys($reasons[$category])), $reasons[$category]),
+                ];
+            }, KnownBots::CATEGORIES),
             'bots' => $bots,
             'series' => array_values($series),
         ];

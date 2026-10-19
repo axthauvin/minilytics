@@ -224,9 +224,15 @@
                     <canvas id="botsChart" class="chart-canvas"></canvas>
                     <div id="botsChartTooltip" class="chart-tooltip"></div>
                 </div>
-                <p class="bot-empty pill-muted" id="botsEmpty" hidden></p>
             </div>
-            <ul class="clean-pill-list bot-robots" id="botRobots"></ul>
+            <div class="bot-side">
+                <div class="tab-buttons bot-side-tabs" id="botSideTabs">
+                    <button type="button" class="chart-toggle-btn active" data-side="robots">Robots</button>
+                    <button type="button" class="chart-toggle-btn" data-side="reasons">Why blocked</button>
+                </div>
+                <div class="bot-side-list" id="botRobots"></div>
+                <div class="bot-side-list" id="botReasons" hidden></div>
+            </div>
         </div>
         <div id="botsList"><span class="pill-muted">No detected bot traffic for this period.</span></div>
     </section>

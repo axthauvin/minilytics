@@ -11,18 +11,19 @@ namespace Minilytics\Tracking;
  */
 final class KnownBots
 {
-    /** An AI assistant reading the page live to answer someone's question. */
-    public const AI_ANSWERS = 'ai_answers';
-    /** Crawlers collecting pages to train AI models. */
-    public const AI_TRAINING = 'ai_training';
-    /** Search engines indexing the page, AI search included. */
+    /** Search engines rendering the page to index it, AI search included. */
     public const SEARCH = 'search';
     /** Browsers driven by a script (headless, Selenium, Playwright...). */
     public const AUTOMATED = 'automated';
-    /** Link previews, monitoring, SEO tools, HTTP libraries and unknown robots. */
+    /** SEO and monitoring tools, AI assistants and crawlers, link previews, HTTP libraries and unknown robots. */
     public const OTHER = 'other';
 
-    public const CATEGORIES = [self::AI_ANSWERS, self::AI_TRAINING, self::SEARCH, self::AUTOMATED, self::OTHER];
+    /**
+     * Only robots that run the tracking script reach the report, so most of
+     * them are search engines rendering the page or automated browsers. The
+     * others are rare enough to share one category.
+     */
+    public const CATEGORIES = [self::SEARCH, self::AUTOMATED, self::OTHER];
 
     /**
      * Checked in order, so specific tokens come before generic ones.
@@ -30,31 +31,31 @@ final class KnownBots
      */
     private const BOTS = [
         // AI assistants fetching a page for a user
-        ['chatgpt-user', 'ChatGPT', 'OpenAI', 'openai.com', self::AI_ANSWERS],
-        ['claude-user', 'Claude', 'Anthropic', 'claude.ai', self::AI_ANSWERS],
-        ['perplexity-user', 'Perplexity', 'Perplexity', 'perplexity.ai', self::AI_ANSWERS],
-        ['mistralai-user', 'Le Chat', 'Mistral AI', 'mistral.ai', self::AI_ANSWERS],
-        ['duckassistbot', 'DuckAssist', 'DuckDuckGo', 'duckduckgo.com', self::AI_ANSWERS],
-        ['meta-externalfetcher', 'Meta AI', 'Meta', 'meta.ai', self::AI_ANSWERS],
-        ['google-notebooklm', 'NotebookLM', 'Google', 'notebooklm.google.com', self::AI_ANSWERS],
-        ['youbot', 'You.com', 'You.com', 'you.com', self::AI_ANSWERS],
+        ['chatgpt-user', 'ChatGPT', 'OpenAI', 'openai.com', self::OTHER],
+        ['claude-user', 'Claude', 'Anthropic', 'claude.ai', self::OTHER],
+        ['perplexity-user', 'Perplexity', 'Perplexity', 'perplexity.ai', self::OTHER],
+        ['mistralai-user', 'Le Chat', 'Mistral AI', 'mistral.ai', self::OTHER],
+        ['duckassistbot', 'DuckAssist', 'DuckDuckGo', 'duckduckgo.com', self::OTHER],
+        ['meta-externalfetcher', 'Meta AI', 'Meta', 'meta.ai', self::OTHER],
+        ['google-notebooklm', 'NotebookLM', 'Google', 'notebooklm.google.com', self::OTHER],
+        ['youbot', 'You.com', 'You.com', 'you.com', self::OTHER],
         // AI search indexes
         ['oai-searchbot', 'ChatGPT search', 'OpenAI', 'openai.com', self::SEARCH],
         ['claude-searchbot', 'Claude search', 'Anthropic', 'claude.ai', self::SEARCH],
         ['perplexitybot', 'Perplexity', 'Perplexity', 'perplexity.ai', self::SEARCH],
         // AI training crawlers
-        ['gptbot', 'GPTBot', 'OpenAI', 'openai.com', self::AI_TRAINING],
-        ['claudebot|anthropic-ai|claude-web', 'ClaudeBot', 'Anthropic', 'claude.ai', self::AI_TRAINING],
-        ['ccbot', 'Common Crawl', 'Common Crawl', 'commoncrawl.org', self::AI_TRAINING],
-        ['bytespider', 'Bytespider', 'ByteDance', 'bytedance.com', self::AI_TRAINING],
-        ['meta-externalagent', 'Meta AI', 'Meta', 'meta.ai', self::AI_TRAINING],
-        ['amazonbot', 'Amazonbot', 'Amazon', 'amazon.com', self::AI_TRAINING],
-        ['applebot-extended', 'Applebot', 'Apple', 'apple.com', self::AI_TRAINING],
-        ['cohere-ai|cohere-training', 'Cohere', 'Cohere', 'cohere.com', self::AI_TRAINING],
-        ['ai2bot', 'AI2Bot', 'Allen Institute for AI', 'allenai.org', self::AI_TRAINING],
-        ['diffbot', 'Diffbot', 'Diffbot', 'diffbot.com', self::AI_TRAINING],
-        ['timpibot', 'Timpibot', 'Timpi', 'timpi.io', self::AI_TRAINING],
-        ['omgili', 'Webz.io', 'Webz.io', 'webz.io', self::AI_TRAINING],
+        ['gptbot', 'GPTBot', 'OpenAI', 'openai.com', self::OTHER],
+        ['claudebot|anthropic-ai|claude-web', 'ClaudeBot', 'Anthropic', 'claude.ai', self::OTHER],
+        ['ccbot', 'Common Crawl', 'Common Crawl', 'commoncrawl.org', self::OTHER],
+        ['bytespider', 'Bytespider', 'ByteDance', 'bytedance.com', self::OTHER],
+        ['meta-externalagent', 'Meta AI', 'Meta', 'meta.ai', self::OTHER],
+        ['amazonbot', 'Amazonbot', 'Amazon', 'amazon.com', self::OTHER],
+        ['applebot-extended', 'Applebot', 'Apple', 'apple.com', self::OTHER],
+        ['cohere-ai|cohere-training', 'Cohere', 'Cohere', 'cohere.com', self::OTHER],
+        ['ai2bot', 'AI2Bot', 'Allen Institute for AI', 'allenai.org', self::OTHER],
+        ['diffbot', 'Diffbot', 'Diffbot', 'diffbot.com', self::OTHER],
+        ['timpibot', 'Timpibot', 'Timpi', 'timpi.io', self::OTHER],
+        ['omgili', 'Webz.io', 'Webz.io', 'webz.io', self::OTHER],
         // Search engines
         ['googlebot|google-inspectiontool|adsbot-google|storebot-google|mediapartners-google|googleother', 'Google', 'Google', 'google.com', self::SEARCH],
         ['bingbot|bingpreview|adidxbot', 'Bing', 'Microsoft', 'bing.com', self::SEARCH],

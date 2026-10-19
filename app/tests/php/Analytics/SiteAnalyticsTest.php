@@ -114,17 +114,22 @@ final class SiteAnalyticsTest extends TestCase
         $this->recordBot('known_bot_user_agent', 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)', 'ip-1', 3600);
         $this->recordBot('known_bot_user_agent', 'Googlebot-Image/1.0', 'ip-2', 1800);
         $this->recordBot('known_bot_user_agent', 'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; ChatGPT-User/1.0; +https://openai.com/bot)', 'ip-3', 1800);
-        $this->recordBot('client:platform_mismatch', $chrome, 'ip-4', 600);
+        $this->recordBot('client:platform_mismatch', $chrome, 'ip-4', 600, 'DE');
         $this->recordBot('internal_traffic', $chrome, 'ip-5', 600);
+        $this->recordBot('client:no_interaction', $chrome, 'ip-6', 300);
 
         $bots = $this->analytics('7d')->botActivity();
 
         $this->assertSame(1, $bots['internal']);
-        $this->assertSame(['ai_answers' => 1, 'ai_training' => 0, 'search' => 2, 'automated' => 1, 'other' => 0], array_column($bots['categories'], 'count', 'category'));
+        $this->assertSame(1, $bots['left']);
+        $this->assertSame(['search' => 2, 'automated' => 1, 'other' => 1], array_column($bots['categories'], 'count', 'category'));
+        $this->assertSame([['reason' => 'client:platform_mismatch', 'count' => 1]], $bots['categories'][1]['reasons']);
         $this->assertSame(['Google' => 2, 'ChatGPT' => 1, 'Chrome · Linux' => 1], array_column($bots['bots'], 'count', 'name'));
         $this->assertSame(4, array_sum(array_column($bots['series'], 'count')));
-        $this->assertSame('Chrome · Linux', $bots['recent'][1]['bot']['name']);
+        $this->assertSame('Chrome · Linux', $bots['recent'][2]['bot']['name']);
+        $this->assertSame('DE', $bots['recent'][2]['country_code']);
         $this->assertNull($bots['recent'][0]['bot']);
+        $this->assertNull($bots['recent'][1]['bot']);
     }
 
     private function analytics(string $range): SiteAnalytics
@@ -143,9 +148,10 @@ final class SiteAnalyticsTest extends TestCase
         $stmt->execute();
     }
 
-    private function recordBot(string $reason, string $userAgent, string $ip, int $secondsAgo): void
+    private function recordBot(string $reason, string $userAgent, string $ip, int $secondsAgo, ?string $country = null): void
     {
-        $stmt = Connections::forSite('test_site')->prepare('INSERT INTO bot_activity (reason, user_agent, origin, ip_hash, timestamp) VALUES (:reason, :ua, :origin, :ip, :timestamp)');
+        $stmt = Connections::forSite('test_site')->prepare('INSERT INTO bot_activity (reason, user_agent, origin, ip_hash, country_code, timestamp) VALUES (:reason, :ua, :origin, :ip, :country, :timestamp)');
+        $stmt->bindValue(':country', $country, $country === null ? SQLITE3_NULL : SQLITE3_TEXT);
         $stmt->bindValue(':reason', $reason, SQLITE3_TEXT);
         $stmt->bindValue(':ua', $userAgent, SQLITE3_TEXT);
         $stmt->bindValue(':origin', 'example.com', SQLITE3_TEXT);

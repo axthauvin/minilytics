@@ -44,17 +44,17 @@ final class Tracker
             throw new TrackingException('Rate limit exceeded.', 429);
         }
         if (($reason = $userAgent->botReason()) !== null) {
-            $store->recordIgnored($reason, $userAgent->value, $originHost, $ip);
+            $store->recordIgnored($reason, $userAgent->value, $originHost, $ip, self::countryCode($server, $ip));
             return ['ignored' => 'bot'];
         }
         if ($payload->name() === '_ml_bot') {
             // The tracking script detected an automated browser and says so instead of sending analytics.
             $reason = substr((string) preg_replace('/[^a-zA-Z0-9_$]/', '', (string) ($payload->data['reason'] ?? '')), 0, 60);
-            $store->recordIgnored('client:' . ($reason !== '' ? $reason : 'unknown'), $userAgent->value, $originHost, $ip);
+            $store->recordIgnored('client:' . ($reason !== '' ? $reason : 'unknown'), $userAgent->value, $originHost, $ip, self::countryCode($server, $ip));
             return ['ignored' => 'bot'];
         }
         if (in_array($ip, (array) ($site['internal_ips'] ?? []), true)) {
-            $store->recordIgnored('internal_traffic', $userAgent->value, $originHost, $ip);
+            $store->recordIgnored('internal_traffic', $userAgent->value, $originHost, $ip, self::countryCode($server, $ip));
             return ['ignored' => 'internal'];
         }
 
@@ -77,6 +77,21 @@ final class Tracker
         }
         $store->record($session, $visitor, ['site_id' => $site['id'], 'name' => $name, 'data' => $data]);
         return ['success' => true];
+    }
+
+    /**
+     * The country of a rejected request, shown in the bot report. A failed
+     * lookup only loses the country, never the record.
+     *
+     * @param array<string, mixed> $server
+     */
+    private static function countryCode(array $server, string $ip): ?string
+    {
+        try {
+            return VisitorLocation::resolve($server, $ip)['country_code'];
+        } catch (Throwable) {
+            return null;
+        }
     }
 
     /**

@@ -191,6 +191,13 @@ final class TrackEndpointTest extends TestCase
         $this->assertSame(1, (int) Connections::forSite('test_site')->querySingle('SELECT COUNT(*) FROM bot_activity'));
     }
 
+    public function testBotsAreLoggedWithTheirCountry(): void
+    {
+        $this->track($this->event(), ['User-Agent: Googlebot/2.1 (+http://www.google.com/bot.html)', 'CF-IPCountry: US']);
+
+        $this->assertSame('US', Connections::forSite('test_site')->querySingle('SELECT country_code FROM bot_activity'));
+    }
+
     public function testBrowsersReportingAutomationAreLoggedAsBots(): void
     {
         $response = $this->track($this->event(['name' => '_ml_bot', 'data' => ['reason' => 'webdriver']]));
