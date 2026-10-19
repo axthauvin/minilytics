@@ -21,6 +21,8 @@ function loadTracker(options = {}) {
     const beacons = [];
     const errors = [];
     const listeners = {};
+    const documentListeners = {};
+    const timers = [];
     const script = {
         src: "http://localhost:8080/minilytics.js",
         getAttribute(name) {
@@ -41,7 +43,10 @@ function loadTracker(options = {}) {
         title: "Tracker smoke test",
         referrer: "",
         hidden: false,
-        addEventListener() {},
+        ...options.document,
+        addEventListener(type, listener) {
+            (documentListeners[type] ||= []).push(listener);
+        },
     };
     const context = {
         Blob,
@@ -79,7 +84,13 @@ function loadTracker(options = {}) {
                 (item) => item !== listener,
             );
         },
-        setTimeout() {},
+        setTimeout(callback, delay) {
+            timers.push({ callback, delay, cleared: false });
+            return timers.length;
+        },
+        clearTimeout(id) {
+            if (timers[id - 1]) timers[id - 1].cleared = true;
+        },
         fetch: options.fetch,
     };
     context.window = context;
@@ -88,7 +99,19 @@ function loadTracker(options = {}) {
         [...(listeners[type] || [])].forEach((listener) =>
             listener({ type, isTrusted }),
         );
-    return { beacons, context, errors, interact };
+    const dispatch = (type) =>
+        [...(documentListeners[type] || []), ...(listeners[type] || [])].forEach(
+            (listener) => listener({ type, isTrusted: true }),
+        );
+    // Runs the pending timers set for the given delay.
+    const tick = (delay) =>
+        timers
+            .filter((timer) => !timer.cleared && timer.delay === delay)
+            .forEach((timer) => {
+                timer.cleared = true;
+                timer.callback();
+            });
+    return { beacons, context, dispatch, errors, interact, tick };
 }
 
 async function payload(body) {
@@ -270,6 +293,66 @@ test("page views and events wait for the first trusted interaction", async () =>
 
     interact("scroll");
     assert.equal(beacons.length, 2, "only the first interaction flushes");
+});
+
+test("a page visible for 3 seconds is counted without any interaction", async () => {
+    const { beacons, tick } = loadTracker({
+        attributes: { "data-require-interaction": "true" },
+        document: { visibilityState: "visible" },
+    });
+    assert.equal(beacons.length, 0);
+
+    tick(3000);
+    assert.equal(beacons.length, 1);
+    assert.equal((await payload(beacons[0].body)).name, "pageview");
+});
+
+test("a prerendered page is only counted once it is shown", async () => {
+    const { beacons, context, dispatch, tick } = loadTracker({
+        attributes: { "data-require-interaction": "true" },
+        document: { visibilityState: "hidden", prerendering: true },
+    });
+    tick(3000);
+    assert.equal(beacons.length, 0, "the timer does not run while prerendering");
+
+    Object.assign(context.document, { visibilityState: "visible", prerendering: false });
+    dispatch("prerenderingchange");
+    tick(3000);
+    assert.equal(beacons.length, 1);
+});
+
+test("a page left before interacting is reported, not counted", () => {
+    const requests = [];
+    const { beacons, dispatch } = loadTracker({
+        attributes: { "data-require-interaction": "true" },
+        document: { visibilityState: "visible" },
+        fetch: (endpoint, init) => {
+            requests.push(JSON.parse(init.body));
+            return Promise.resolve({ ok: true });
+        },
+    });
+
+    dispatch("pagehide");
+    assert.equal(beacons.length, 0);
+    assert.deepEqual(
+        requests.map((request) => [request.name, request.data.reason]),
+        [["_ml_bot", "no_interaction"]],
+    );
+});
+
+test("a page never shown is not reported when it is left", () => {
+    const requests = [];
+    const { dispatch } = loadTracker({
+        attributes: { "data-require-interaction": "true" },
+        document: { visibilityState: "hidden" },
+        fetch: (endpoint, init) => {
+            requests.push(JSON.parse(init.body));
+            return Promise.resolve({ ok: true });
+        },
+    });
+
+    dispatch("pagehide");
+    assert.deepEqual(requests, []);
 });
 
 test("a detected automated browser is reported to the server", async () => {
