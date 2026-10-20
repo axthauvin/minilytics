@@ -4,9 +4,11 @@ Minilytics is private without any setting. It uses no cookies, stores nothing in
 
 ## Two tracking modes
 
-**Strict mode** is the default, and it works without a consent banner. Minilytics recognizes a visitor with an anonymous code that changes every month, and keeps nothing on their device. The only downside is that a visitor who changes networks, for example from Wi-Fi to mobile data, is counted twice.
+**Strict mode** is the default, and it works without a consent banner. Minilytics keeps nothing on the visitor's device: your server recognizes them with an anonymous code, computed from their IP address and browser. The code changes every month, so a visitor who comes back during the month is counted once and their visits are shown together, but nobody can be followed from one month to the next. The only downsides are that a visitor who changes networks, for example from Wi-Fi to mobile data, is counted twice, and that two people sharing the same network and the same browser are counted once.
 
-**Enriched mode** is more precise, but it needs your visitors' consent. It only starts once a visitor accepts analytics in your consent banner, then keeps a temporary identifier in their browser so that a visit stays one visit even when their network changes. The identifier is deleted when the tab is closed or after 30 minutes without activity, so nobody can be followed over time. Browsers that ask not to be tracked (Do Not Track or Global Privacy Control) are never tracked in this mode.
+The code is computed with a random value that your server draws at the start of each month and deletes at the end of it. Once it is gone, even someone with full access to your server cannot tell which visitor a past code belonged to.
+
+**Enriched mode** is more precise, but it needs your visitors' consent. It only starts once a visitor accepts analytics in your consent banner, then keeps a temporary identifier in their browser so that a visit stays one visit even when their network changes. Returning visitors are recognized in the same way as in strict mode. The identifier is deleted when the tab is closed or after 30 minutes without activity. Browsers that ask not to be tracked (Do Not Track or Global Privacy Control) are never tracked in this mode.
 
 Choose strict mode if you do not want a consent banner, and enriched mode if you already have one.
 

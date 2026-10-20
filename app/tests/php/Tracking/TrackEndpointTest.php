@@ -173,13 +173,26 @@ final class TrackEndpointTest extends TestCase
         $this->assertNotSame('client-visitor', $first['visitor_id']);
     }
 
-    public function testEnrichedModeKeepsTheClientIds(): void
+    public function testEnrichedModeKeepsTheClientSessionButRecognisesTheVisitorOnTheServer(): void
     {
-        $this->track($this->event(['session_id' => 'session-1', 'visitor_id' => 'visitor-1', 'data' => ['path' => '/', 'tracking_mode' => 'enriched']]));
+        $enriched = ['path' => '/', 'tracking_mode' => 'enriched'];
+        $this->track($this->event(['session_id' => 'session-1', 'visitor_id' => 'visitor-1', 'data' => $enriched]));
+        $this->track($this->event(['session_id' => 'session-2', 'data' => $enriched]));
+        [$first, $second] = $this->storedEvents();
+
+        $this->assertSame('session-1', $first['session_id']);
+        $this->assertSame('session-2', $second['session_id']);
+        $this->assertNotSame('visitor-1', $first['visitor_id']);
+        $this->assertSame($first['visitor_id'], $second['visitor_id'], 'A returning visitor is recognised in enriched mode too.');
+    }
+
+    public function testEnrichedModeWithoutASessionFallsBackToTheServerSession(): void
+    {
+        $this->track($this->event(['data' => ['path' => '/', 'tracking_mode' => 'enriched']]));
 
         $event = $this->storedEvents()[0];
-        $this->assertSame('session-1', $event['session_id']);
-        $this->assertSame('visitor-1', $event['visitor_id']);
+        $this->assertMatchesRegularExpression('/^[0-9a-f]{32}$/', $event['session_id']);
+        $this->assertMatchesRegularExpression('/^[0-9a-f]{32}$/', $event['visitor_id']);
     }
 
     public function testBotsAreLoggedSeparately(): void

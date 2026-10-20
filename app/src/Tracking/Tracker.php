@@ -67,14 +67,12 @@ final class Tracker
             $data = array_merge($data, ['country' => 'Unknown', 'country_code' => 'UN', 'region' => '', 'city' => '']);
         }
 
-        if ($data['_ml_tracking_mode'] === 'strict') {
-            // No identifier from the browser: a server-side key that rotates monthly.
-            $visitor = VisitorIdentity::visitorId((string) $site['id'], $ip, $userAgent->value);
-            $session = $store->activeSessionId($visitor) ?? VisitorIdentity::sessionId();
-        } else {
-            $session = $payload->sessionId ?: VisitorIdentity::sessionId();
-            $visitor = $payload->visitorId ?: $session;
-        }
+        // The visitor is always recognised by the server, with a salt that changes every month.
+        // With consent, the browser keeps the visit together when the network changes.
+        $visitor = VisitorIdentity::visitorId((string) $site['id'], $ip, $userAgent->value);
+        $session = $data['_ml_tracking_mode'] === 'enriched' && $payload->sessionId !== ''
+            ? $payload->sessionId
+            : ($store->activeSessionId($visitor) ?? VisitorIdentity::sessionId());
         $store->record($session, $visitor, ['site_id' => $site['id'], 'name' => $name, 'data' => $data]);
         return ['success' => true];
     }

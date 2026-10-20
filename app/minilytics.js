@@ -33,9 +33,7 @@
         !!script && script.getAttribute("data-consent") === "granted";
     var SESSION_KEY = "minilytics_session_v2_" + siteId;
     var LAST_KEY = SESSION_KEY + "_last";
-    var visitorId = null,
-        pageId = null,
-        lastPath = null,
+    var lastPath = null,
         engaged = false,
         configurationReported = false;
 
@@ -175,14 +173,12 @@
             ? crypto.randomUUID().replace(/-/g, "")
             : Math.random().toString(36).slice(2) + Date.now().toString(36);
     }
+    // Strict mode stores nothing in the browser and sends no identifier: the
+    // server recognises the visitor from a hash that changes every month.
+    // Enriched mode keeps the visit in sessionStorage once consent is granted,
+    // so it survives a network change.
     function sessionId() {
-        // Strict mode deliberately does not use cookies, localStorage, or
-        // sessionStorage. This identifier exists only for the current document.
-        if (privacyMode === "strict") {
-            if (!pageId) pageId = id();
-            return pageId;
-        }
-        if (!consentGranted) return null;
+        if (privacyMode === "strict" || !consentGranted) return null;
         try {
             var last = Number(sessionStorage.getItem(LAST_KEY) || 0);
             var value = sessionStorage.getItem(SESSION_KEY);
@@ -195,12 +191,6 @@
         } catch (_) {
             return id();
         }
-    }
-    // In strict mode this is the page-only identifier above. Enriched mode may
-    // use sessionStorage only after an external consent banner has granted it.
-    function getVisitorId() {
-        if (!visitorId) visitorId = sessionId();
-        return visitorId;
     }
     function campaign() {
         var p = new URLSearchParams(location.search),
@@ -395,14 +385,13 @@
         }
         if (privacyMode === "strict" && privacyReason)
             reportDebug(
-                "Browser privacy preference detected; only minimal, page-scoped analytics will be sent.",
+                "Browser privacy preference detected; only cookieless, anonymous analytics will be sent.",
                 { event: name, reason: privacyReason },
             );
         var payload = JSON.stringify({
             site_id: siteId,
             site_key: siteKey,
             session_id: sessionId(),
-            visitor_id: getVisitorId(),
             name: name,
             data: Object.assign(context(), sanitise(data)),
         });
