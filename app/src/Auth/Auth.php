@@ -6,8 +6,10 @@ namespace Minilytics\Auth;
 
 use Delight\Auth\Auth as AuthEngine;
 use Delight\Auth\Role;
+use Minilytics\Sites\DemoTraffic;
 use Minilytics\Sites\SiteRegistry;
 use PDO;
+use Throwable;
 
 /**
  * Authentication helpers for the private dashboard.
@@ -99,14 +101,16 @@ final class Auth
             http_response_code(409);
             self::jsonError('Onboarding is required.');
         }
-        if (self::user()) {
-            return;
+        if (!self::user() && !SiteRegistry::isPublic((string) $siteId)) {
+            http_response_code(401);
+            self::jsonError('Authentication required.');
         }
-        if (SiteRegistry::isPublic((string) $siteId)) {
-            return;
+        // The demo website fills itself in as it is read, so it never shows stale data.
+        try {
+            DemoTraffic::refresh((string) $siteId);
+        } catch (Throwable $e) {
+            error_log('Minilytics demo refresh failed: ' . $e->getMessage());
         }
-        http_response_code(401);
-        self::jsonError('Authentication required.');
     }
     public static function isGuest(): bool
     {

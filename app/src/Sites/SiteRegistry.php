@@ -221,6 +221,12 @@ final class SiteRegistry
             if (array_key_exists('is_public', $input)) {
                 $site['is_public'] = filter_var($input['is_public'], FILTER_VALIDATE_BOOLEAN);
             }
+            if (array_key_exists('demo_days', $input)) {
+                $site['demo_days'] = DemoTraffic::days(['demo_days' => $input['demo_days']]);
+                if ($site['demo_days'] === 0) {
+                    unset($site['demo_days']);
+                }
+            }
             if (!empty($input['rotate_key'])) {
                 $site['write_key'] = bin2hex(random_bytes(24));
             }
