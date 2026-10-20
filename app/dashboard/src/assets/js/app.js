@@ -573,6 +573,12 @@ const App = {
       return;
     }
 
+    // A bare /dashboard opens the websites portal, not the last site viewed.
+    if (!hash && !siteParam) {
+      this.returnToWebsites();
+      return;
+    }
+
     // Check memory or sessionStorage if not in query string
     if (!siteParam || siteParam === "all") {
       const saved = this.currentSiteId || sessionStorage.getItem("minilytics_current_site");
@@ -637,7 +643,7 @@ const App = {
     }
 
     // Default to websites portal page
-    this.navigateTo("websites");
+    this.returnToWebsites();
   },
 
   navigateTo(pageName) {
