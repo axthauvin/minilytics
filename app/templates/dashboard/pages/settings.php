@@ -10,8 +10,8 @@
         <button class="settings-tab" type="button" role="tab" aria-selected="false" aria-controls="settingsTrackingPanel" id="settingsTrackingTab" data-settings-tab="tracking">Tracking</button>
         <button class="settings-tab" type="button" role="tab" aria-selected="false" aria-controls="settingsDatabasePanel" id="settingsDatabaseTab" data-settings-tab="database">Database</button>
         <button class="settings-tab" type="button" role="tab" aria-selected="false" aria-controls="settingsAssistantsPanel" id="settingsAssistantsTab" data-settings-tab="assistants">AI assistants</button>
-        <button class="settings-tab" type="button" role="tab" aria-selected="false" aria-controls="settingsUpdatesPanel" id="settingsUpdatesTab" data-settings-tab="updates">Updates<span class="update-dot update-dot--tab" data-update-dot title="A new Minilytics version is available" hidden></span></button>
         <button class="settings-tab" type="button" role="tab" aria-selected="false" aria-controls="settingsDisplayPanel" id="settingsDisplayTab" data-settings-tab="display">Display</button>
+        <button class="settings-tab" type="button" role="tab" aria-selected="false" aria-controls="settingsUpdatesPanel" id="settingsUpdatesTab" data-settings-tab="updates">Updates<span class="update-dot update-dot--tab" data-update-dot title="A new Minilytics version is available" hidden></span></button>
     </div>
     <div class="settings-panel" id="settingsAccessPanel" role="tabpanel" aria-labelledby="settingsAccessTab" data-settings-panel="access">
         <section class="settings-card" id="inviteUserCard">
@@ -144,6 +144,21 @@
             <div id="mcpAccessList" class="mcp-access-list"></div>
         </section>
     </div>
+    <div class="settings-panel" id="settingsDisplayPanel" role="tabpanel" aria-labelledby="settingsDisplayTab" data-settings-panel="display" hidden>
+        <section class="settings-card">
+            <div class="settings-card-heading">
+                <div>
+                    <h3>Time format</h3>
+                    <p>How times are written across the dashboard. This choice is saved in this browser only.</p>
+                </div>
+            </div>
+            <div class="display-field"><label for="timeFormatSelect">Times</label><select id="timeFormatSelect">
+                <option value="24h">24-hour (17:25)</option>
+                <option value="12h">12-hour (5:25 PM)</option>
+            </select></div>
+            <p class="settings-feedback" id="timeFormatFeedback" role="status"></p>
+        </section>
+    </div>
     <div class="settings-panel" id="settingsUpdatesPanel" role="tabpanel" aria-labelledby="settingsUpdatesTab" data-settings-panel="updates" hidden>
         <section class="settings-card" id="updatesCard">
             <div class="settings-card-heading">
@@ -169,21 +184,6 @@
                 <button type="button" class="btn-outline" id="updateCheckNow" hidden>Check now</button>
                 <button type="button" class="btn-outline" id="updateRollback" hidden>Go back to the previous version</button>
             </div>
-        </section>
-    </div>
-    <div class="settings-panel" id="settingsDisplayPanel" role="tabpanel" aria-labelledby="settingsDisplayTab" data-settings-panel="display" hidden>
-        <section class="settings-card">
-            <div class="settings-card-heading">
-                <div>
-                    <h3>Time format</h3>
-                    <p>How times are written across the dashboard. This choice is saved in this browser only.</p>
-                </div>
-            </div>
-            <div class="display-field"><label for="timeFormatSelect">Times</label><select id="timeFormatSelect">
-                <option value="24h">24-hour (17:25)</option>
-                <option value="12h">12-hour (5:25 PM)</option>
-            </select></div>
-            <p class="settings-feedback" id="timeFormatFeedback" role="status"></p>
         </section>
     </div>
 </div>
