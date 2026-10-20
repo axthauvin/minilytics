@@ -35,6 +35,23 @@ final class SiteAnalyticsTest extends TestCase
         $this->assertSame(4, $summary['events']);
     }
 
+    public function testVisitorsSeenInAnEarlierVisitAreReturning(): void
+    {
+        $this->record('earlier', 'v1', 'pageview', ['path' => '/'], 9 * 86400);
+        $this->record('again', 'v1', 'pageview', ['path' => '/'], 3600);
+        $this->record('first', 'v2', 'pageview', ['path' => '/'], 7200);
+        $this->record('second', 'v2', 'pageview', ['path' => '/'], 1800);
+        $this->record('once', 'v3', 'pageview', ['path' => '/'], 600);
+        $this->record('gone', 'v4', 'pageview', ['path' => '/'], 9 * 86400);
+        $this->record('gone_too', 'v4', 'pageview', ['path' => '/'], 8 * 86400);
+
+        $summary = $this->analytics('7d')->summary();
+
+        $this->assertSame(3, $summary['visitors']);
+        $this->assertSame(2, $summary['returning_visitors'], 'v1 came back from an earlier period, v2 within it; v3 came once and v4 not at all.');
+        $this->assertSame(1, $summary['previous']['returning_visitors']);
+    }
+
     public function testVisitsWithASingleActionCountAsBounces(): void
     {
         $this->record('s1', 'v1', 'pageview', ['path' => '/'], 3600);

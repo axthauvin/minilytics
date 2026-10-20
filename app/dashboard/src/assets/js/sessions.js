@@ -17,6 +17,12 @@ const SessionsPage = {
   activeSession: null,
   eventSearch: "",
   eventOrder: "desc",
+  // Page and device context sent with every event: not shown as its properties.
+  CONTEXT_KEYS: new Set([
+    "browser", "os", "device", "screen", "viewport", "language", "country", "country_code", "region", "city",
+    "hostname", "site_id", "session_id", "path", "title", "url", "referrer", "search", "hash", "tracking_mode",
+    "_ml_tracking_mode",
+  ]),
 
   init() {
     this.datePicker = new MinilyticsCalendarPicker(document.getElementById("sessionDateFilter"));
@@ -249,7 +255,7 @@ const SessionsPage = {
 
     const total = typeof totalCount === "number" ? totalCount : sessions.length;
     if (countBadge) {
-      countBadge.textContent = `${total} session${total === 1 ? "" : "s"}`;
+      countBadge.textContent = `${total} visitor${total === 1 ? "" : "s"}`;
     }
 
     if (sessions.length === 0) {
@@ -262,17 +268,17 @@ const SessionsPage = {
       return;
     }
 
-    // Sort chronologically by started_at DESC
+    // A visitor who comes back moves to the top: sort by latest activity.
     const sorted = [...sessions].sort((a, b) => {
-      const ta = a.started_at || a.last_active_at || "";
-      const tb = b.started_at || b.last_active_at || "";
+      const ta = a.last_active_at || a.started_at || "";
+      const tb = b.last_active_at || b.started_at || "";
       return tb.localeCompare(ta);
     });
 
     // Group sessions by day to guarantee each day delimiter appears exactly once
     const daysMap = new Map();
     sorted.forEach((s) => {
-      const dayKey = this.extractDayKey(s.started_at || s.last_active_at);
+      const dayKey = this.extractDayKey(s.last_active_at || s.started_at);
       if (!daysMap.has(dayKey)) {
         daysMap.set(dayKey, []);
       }
@@ -296,16 +302,18 @@ const SessionsPage = {
       }
 
       daySessions.forEach((s) => {
-        const avatarUrl =
-          s.avatar_url || Icons.getDiceBearGlyphUrl(s.session_id);
-        const fallbackSvg = Icons.getIdenticonSvgDataUri(s.session_id, 40);
+        // Seeded by the visitor, so that the visits of one person share their avatar.
+        const visitorId = s.visitor_id || s.session_id;
+        const avatarUrl = s.avatar_url || Icons.getDiceBearGlyphUrl(visitorId);
+        const fallbackSvg = Icons.getIdenticonSvgDataUri(visitorId, 40);
+        const visitBadge = this.visitsBadge(s);
         const sessionId = s.session_id || "Unknown";
         const country = s.country || "Unknown";
         const countryCode = s.country_code || "UN";
         const city = s.city || "";
         const os = s.os || "Unknown OS";
         const browser = s.browser || "Unknown Browser";
-        const timeAgo = s.time_ago || s.started_at;
+        const timeAgo = s.time_ago || s.last_active_at;
         const duration = s.duration_label || "0s";
         const pageviewCount = Number(s.pageview_count) || 0;
         const eventCount = Number(s.event_count) || 0;
@@ -326,6 +334,7 @@ const SessionsPage = {
                               ${Icons.getCountryFlag(countryCode, { size: 14 })}
                               <span>${this.escapeHtml(city ? `${country}, ${city}` : country)}</span>
                           </span>
+                          ${visitBadge}
                       </div>
                       <div class="session-card-sub-row">
                           <span class="session-meta-item">${Icons.getBrowserIcon(browser, 14)} ${this.escapeHtml(browser)}</span>
@@ -360,7 +369,7 @@ const SessionsPage = {
     const next = document.getElementById("sessionsNextPage");
 
     if (info) {
-      info.textContent = `Page ${data.page} of ${data.total_pages} (${data.total} session${data.total === 1 ? "" : "s"})`;
+      info.textContent = `Page ${data.page} of ${data.total_pages} (${data.total} visitor${data.total === 1 ? "" : "s"})`;
     }
 
     if (prev) prev.disabled = data.page <= 1;
@@ -399,7 +408,8 @@ const SessionsPage = {
     const sessionId = this.activeSession?.session_id;
     const siteId = this.filters.siteId || window.App?.currentSiteId || "";
     if (!sessionId) return;
-    if (!window.confirm(`Delete session ${sessionId} and all of its events? This cannot be undone.`)) return;
+    const visits = Number(this.activeSession?.visit_count) || 1;
+    if (!window.confirm(`Delete this visitor and all of their visits (${visits}) and events? This cannot be undone.`)) return;
 
     const button = document.getElementById("btnDeleteSession");
     if (button) {
@@ -416,7 +426,7 @@ const SessionsPage = {
     } finally {
       if (button) {
         button.disabled = false;
-        button.textContent = "Delete session";
+        button.textContent = "Delete visitor";
       }
     }
   },
@@ -453,10 +463,15 @@ const SessionsPage = {
       if (el) el.textContent = val;
     };
 
-    setTxt("detailSessionId", sId || "Unknown");
+    const idEl = document.getElementById("detailSessionId");
+    if (idEl) {
+      idEl.textContent = session.visitor_id || sId || "Unknown";
+      idEl.title = `Visitor ${session.visitor_id || sId}`;
+    }
 
-    const avatarUrl = session.avatar_url || Icons.getDiceBearGlyphUrl(sId);
-    const fallbackSvg = Icons.getIdenticonSvgDataUri(sId, 64);
+    const visitorId = session.visitor_id || sId;
+    const avatarUrl = session.avatar_url || Icons.getDiceBearGlyphUrl(visitorId);
+    const fallbackSvg = Icons.getIdenticonSvgDataUri(visitorId, 64);
     const avatarImg = document.getElementById("detailAvatarImg");
     if (avatarImg) {
       avatarImg.src = avatarUrl;
@@ -492,8 +507,7 @@ const SessionsPage = {
     const lastActivity = this.formatEventTime(session.ended_at);
     setTxt("detailStartedAt", startedAt);
     setTxt("detailLastActivity", lastActivity);
-    setTxt("detailLastActivityFull", lastActivity);
-    setTxt("detailReferrer", session.referrer || "Direct");
+    setTxt("detailVisitCount", String(Number(session.visit_count) || 1));
 
     // Extract first event details for screen / locale
     const firstEvt =
@@ -520,183 +534,141 @@ const SessionsPage = {
       }
     }
 
-    // Render the page journey with a clean properties card.
+    // Render the journey: every visit of the visitor, each one under its date and time.
     const journeyContainer = document.getElementById("journeyStepsList");
     if (!journeyContainer) return;
 
     const chronologicalEvents = session.events || [];
+    const visits = session.visits?.length
+      ? session.visits
+      : [{ session_id: sId, visit_number: 1, started_at: session.started_at, duration_seconds: session.duration_seconds, referrer: session.referrer }];
     const query = this.eventSearch.trim().toLocaleLowerCase();
-    const matchingEvents = chronologicalEvents.filter((evt) =>
-      this.eventMatchesSearch(evt, query),
-    );
-    const events = this.eventOrder === "desc" ? [...matchingEvents].reverse() : matchingEvents;
-    this.renderJourneyControls(matchingEvents.length, chronologicalEvents.length);
+    const matchingCount = chronologicalEvents.filter((evt) => this.eventMatchesSearch(evt, query)).length;
+    this.renderJourneyControls(matchingCount, chronologicalEvents.length);
+
+    const newestFirst = this.eventOrder === "desc";
     let html = "";
-
-    const EXCLUDE_KEYS = new Set([
-      "browser",
-      "os",
-      "device",
-      "screen",
-      "viewport",
-      "language",
-      "country",
-      "country_code",
-      "region",
-      "city",
-      "hostname",
-      "site_id",
-      "session_id",
-      "path",
-      "title",
-      "url",
-      "referrer",
-      "search",
-      "hash",
-      "tracking_mode",
-      "_ml_tracking_mode",
-    ]);
-
-    events.forEach((evt, idx) => {
-      const isPv = evt.name === "pageview";
-      const iconSvg = isPv
-        ? Icons.get("file-text", { size: 15, color: "#f59e0b" })
-        : Icons.get("zap", { size: 15, color: "#f59e0b" });
-      const title = isPv
-        ? evt.data && evt.data.path
-          ? evt.data.path
-          : "/"
-        : evt.name;
-      const subtitle =
-        !isPv && evt.data && evt.data.path
-          ? evt.data.path
-          : evt.data && evt.data.title
-            ? evt.data.title
-            : "";
-      const stepNum = idx + 1;
-      const timeFormatted = this.formatEventTime(evt.timestamp);
-      const chronologicalIndex = chronologicalEvents.indexOf(evt);
-      const durText = this.formatStepDuration(chronologicalEvents, chronologicalIndex, session);
-
-      // Extract custom event data payload only (no system or page context boilerplate)
-      const customPayload = {};
-      if (evt.data && typeof evt.data === "object") {
-        Object.keys(evt.data).forEach((k) => {
-          if (EXCLUDE_KEYS.has(k)) return;
-          const val = evt.data[k];
-          if (val === null || val === undefined || val === "") return;
-          customPayload[k] = val;
-        });
-      }
-
-      const customKeys = Object.keys(customPayload);
-      const hasCustomData = !isPv && customKeys.length > 0;
-      const propId = `stepProps_${evt.id || idx}_${idx}`;
-
-      html += `
-                <div class="journey-step-item">
-                    <div class="journey-step-left">
-                        <div class="journey-step-circle">${stepNum}</div>
-                        <div class="journey-step-line"></div>
-                    </div>
-                    <div class="journey-step-content">
-                        <div class="journey-step-top">
-                            <div class="journey-step-title-wrap">
-                                <span class="journey-step-icon">${iconSvg}</span>
-                                <span class="journey-step-path">${this.escapeHtml(title)}</span>
-                                ${subtitle && !isPv ? `<span class="journey-step-subtitle font-mono">${this.escapeHtml(subtitle)}</span>` : ""}
-                            </div>
-                            <span class="journey-step-time">${this.escapeHtml(timeFormatted)}</span>
-                        </div>
-                        <div class="journey-step-meta-row">
-                            <span class="journey-step-dur">
-                                ${Icons.get("clock", { size: 13, color: "#64748b" })}
-                                <span>${durText}</span>
-                            </span>
-
-                            ${
-                              hasCustomData
-                                ? `
-                                <button type="button" class="btn-step-props active" onclick="SessionsPage.toggleStepProps('${propId}', this)">
-                                    <span class="props-pill">
-                                        ${Icons.get("tag", { size: 11, color: "#475569" })}
-                                        <span>${customKeys.length}</span>
-                                    </span>
-                                    <span class="props-text">Properties</span>
-                                    <span class="props-chevron">${Icons.get("chevron-down", { size: 12, color: "#64748b" })}</span>
-                                </button>
-                            `
-                                : ""
-                            }
-                        </div>
-
-                        ${
-                          hasCustomData
-                            ? `
-                            <div class="step-props-card" id="${propId}">
-                                <div class="props-table">
-                                    ${customKeys
-                                      .map((k) => {
-                                        const v = customPayload[k];
-                                        const formatted =
-                                          typeof v === "object"
-                                            ? JSON.stringify(v)
-                                            : String(v);
-                                        return `
-                                            <div class="props-row">
-                                                <span class="props-key font-mono">${this.escapeHtml(k)}</span>
-                                                <span class="props-val font-mono">${this.escapeHtml(formatted)}</span>
-                                            </div>
-                                        `;
-                                      })
-                                      .join("")}
-                                </div>
-                            </div>
-                        `
-                            : ""
-                        }
-                    </div>
-                </div>
-            `;
+    (newestFirst ? [...visits].reverse() : visits).forEach((visit) => {
+      const visitEvents = chronologicalEvents.filter((evt) => (evt.session_id || sId) === visit.session_id);
+      const shown = visitEvents.filter((evt) => this.eventMatchesSearch(evt, query));
+      if (shown.length === 0) return;
+      const steps = (newestFirst ? [...shown].reverse() : shown)
+        .map((evt) => this.journeyStep(evt, visitEvents, visit))
+        .join("");
+      html += `<section class="visit-block">${this.visitHeader(visit)}<ol class="visit-steps">${steps}</ol></section>`;
     });
 
-    if (events.length === 0) {
+    if (html === "") {
       html = `
         <div class="journey-no-results">
-          No events match “${this.escapeHtml(this.eventSearch.trim())}”.
+          Nothing matches “${this.escapeHtml(this.eventSearch.trim())}”.
         </div>
       `;
-    } else {
-      const newestFirst = this.eventOrder === "desc";
-      const journeyStartLabel = newestFirst ? "Session ended" : "Session started";
-      const journeyEndLabel = newestFirst ? "Session started" : "Session ended";
-      const journeyMarker = (label, connectsToNext = false) => `
-        <div class="journey-step-item journey-step-end">
-          <div class="journey-step-left">
-            <div class="journey-step-circle journey-circle-dot">
-              <span class="journey-inner-dot"></span>
-            </div>
-            ${connectsToNext ? '<div class="journey-step-line"></div>' : ''}
-          </div>
-          <div class="journey-step-content journey-marker-content">
-            <span class="journey-end-text">${label}</span>
-          </div>
-        </div>
-      `;
-      html = journeyMarker(journeyStartLabel, true) + html;
-      html += `
-        ${journeyMarker(journeyEndLabel)}
-        `;
     }
 
     journeyContainer.innerHTML = html;
   },
 
+  /** The date and time a visit started, which separates it from the visitor's other visits. */
+  visitHeader(visit) {
+    const date = this.parseTimestamp(visit.started_at);
+    const when = date
+      ? `${date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })} · ${TimeFormat.time(date)}`
+      : "";
+    const pages = Number(visit.pageview_count) || 0;
+    const events = Number(visit.event_count) || 0;
+    const details = [
+      visit.duration_label,
+      visit.referrer || "Direct",
+      `${pages} page${pages === 1 ? "" : "s"}`,
+      `${events} event${events === 1 ? "" : "s"}`,
+    ].filter(Boolean);
+    return `
+      <header class="visit-head">
+        <span class="visit-head-date">${this.escapeHtml(when)}</span>
+        <span class="visit-head-details">${details.map((d) => this.escapeHtml(d)).join('<span aria-hidden="true"> · </span>')}</span>
+      </header>
+    `;
+  },
+
+  /** One line per event: time, what happened, its properties and the time spent on it. */
+  journeyStep(evt, visitEvents, visit) {
+    const isPageview = evt.name === "pageview";
+    const data = evt.data && typeof evt.data === "object" ? evt.data : {};
+    const title = isPageview ? data.path || "/" : evt.name;
+    const context = isPageview ? data.title || "" : data.path || "";
+    const date = this.parseTimestamp(evt.timestamp);
+    const time = date
+      ? TimeFormat.time(date, { seconds: true })
+      : evt.timestamp;
+    const duration = this.formatStepDuration(visitEvents, visitEvents.indexOf(evt), visit);
+
+    const properties = isPageview
+      ? []
+      : Object.keys(data)
+          .filter((key) => !this.CONTEXT_KEYS.has(key) && data[key] !== null && data[key] !== undefined && data[key] !== "")
+          .map((key) => [key, typeof data[key] === "object" ? JSON.stringify(data[key]) : String(data[key])]);
+    const propertiesToggle = properties.length
+      ? `<button type="button" class="btn-step-props" aria-expanded="false" onclick="SessionsPage.toggleStepProps(this)">
+          <span class="props-pill">${Icons.get("tag", { size: 11, color: "#475569" })}<span>${properties.length}</span></span>
+          <span class="props-text">Properties</span>
+          <span class="props-chevron">${Icons.get("chevron-down", { size: 12, color: "#64748b" })}</span>
+        </button>`
+      : "";
+    const propertiesCard = properties.length
+      ? `<div class="step-props-card visit-step-props" hidden>
+          <div class="props-table">
+            ${properties
+              .map(([key, value]) => `
+                <div class="props-row">
+                  <span class="props-key font-mono">${this.escapeHtml(key)}</span>
+                  <span class="props-val font-mono">${this.escapeHtml(value)}</span>
+                </div>`)
+              .join("")}
+          </div>
+        </div>`
+      : "";
+
+    return `
+      <li class="visit-step ${isPageview ? "is-pageview" : "is-event"}">
+        <span class="visit-step-time">${this.escapeHtml(time)}</span>
+        <span class="visit-step-icon">${Icons.get(isPageview ? "file-text" : "zap", { size: 14 })}</span>
+        <div class="visit-step-main">
+          ${isPageview ? this.pageLink(data, title, "visit-step-title") : `<span class="visit-step-title">${this.escapeHtml(title)}</span>`}
+          ${context ? (isPageview ? `<span class="visit-step-context">${this.escapeHtml(context)}</span>` : this.pageLink(data, context, "visit-step-context")) : ""}
+          ${propertiesToggle}
+        </div>
+        <span class="visit-step-duration" title="Time until the next event">${duration}</span>
+        ${propertiesCard}
+      </li>
+    `;
+  },
+
+  /** "2 visits" on a visitor's card, when they came more than once. */
+  visitsBadge(session) {
+    const visits = Number(session.visit_count) || 1;
+    if (visits < 2) return "";
+    return `<span class="session-badge-returning" title="Returning visitor: ${visits} visits in this period">${Icons.get("repeat", { size: 11 })}<span>${visits} visits</span></span>`;
+  },
+
+  parseTimestamp(ts) {
+    if (!ts) return null;
+    const d = new Date(ts.includes("T") ? ts : ts.replace(" ", "T") + "Z");
+    return isNaN(d.getTime()) ? null : d;
+  },
+
+  /** Matches pages (path, title, "page view") and events (name, path, property names and values). */
   eventMatchesSearch(evt, query) {
     if (!query) return true;
     const data = evt?.data || {};
-    const searchable = [evt?.name, data.path, data.title, data.url]
-      .filter(Boolean)
+    const isPageview = evt?.name === "pageview";
+    const properties = isPageview
+      ? []
+      : Object.keys(data)
+          .filter((key) => !this.CONTEXT_KEYS.has(key))
+          .flatMap((key) => [key, typeof data[key] === "object" ? JSON.stringify(data[key]) : data[key]]);
+    const searchable = [isPageview ? "page view" : evt?.name, data.path, data.title, data.url, ...properties]
+      .filter((value) => value !== null && value !== undefined && value !== "")
       .join(" ")
       .toLocaleLowerCase();
     return searchable.includes(query);
@@ -728,12 +700,7 @@ const SessionsPage = {
         day: "numeric",
         month: "short",
       });
-      const timeStr = d.toLocaleTimeString("en-US", {
-        hour: "numeric",
-        minute: "2-digit",
-        second: "2-digit",
-        hour12: true,
-      });
+      const timeStr = TimeFormat.time(d, { seconds: true });
       return `${dayMonth}, ${timeStr}`;
     } catch (e) {
       return ts;
@@ -775,14 +742,26 @@ const SessionsPage = {
     return parts.join(" ");
   },
 
-  toggleStepProps(id, btn) {
-    const el = document.getElementById(id);
-    if (!el) return;
-    const isHidden = window.getComputedStyle(el).display === "none";
-    el.style.display = isHidden ? "block" : "none";
-    if (btn) {
-      btn.classList.toggle("active", isHidden);
+  /** The page as a link that opens it on the website, when its address is known. */
+  pageLink(data, label, className) {
+    const host = String(data.hostname || "");
+    const path = String(data.path || "");
+    if (!/^[a-z0-9.-]+$/i.test(host) || !path.startsWith("/")) {
+      return `<span class="${className}">${this.escapeHtml(label)}</span>`;
     }
+    // The tracker only sends the hostname: a page on the dashboard's own host keeps its port.
+    const local = /^(localhost|127\.)/.test(host) || host.endsWith(".localhost");
+    const origin = host === window.location.hostname ? window.location.origin : `${local ? "http" : "https"}://${host}`;
+    const url = `${origin}${path}`;
+    return `<a class="${className} visit-step-link" href="${this.escapeHtml(url)}" target="_blank" rel="noopener noreferrer" title="Open ${this.escapeHtml(url)}">${this.escapeHtml(label)}</a>`;
+  },
+
+  toggleStepProps(button) {
+    const card = button.closest(".visit-step")?.querySelector(".visit-step-props");
+    if (!card) return;
+    card.hidden = !card.hidden;
+    button.classList.toggle("active", !card.hidden);
+    button.setAttribute("aria-expanded", String(!card.hidden));
   },
 
   escapeHtml(str) {

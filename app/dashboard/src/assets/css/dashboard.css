@@ -1570,7 +1570,7 @@ html.sidebar-preload-collapsed .sidebar .user-avatar {
    ========================================================================== */
 .umami-stats-grid {
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
     gap: 16px;
     margin-bottom: 20px;
 }
@@ -1925,6 +1925,20 @@ html.sidebar-preload-collapsed .sidebar .user-avatar {
     gap: 4px;
 }
 
+.session-badge-returning {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 1px 7px;
+    border: 1px solid #c7d2fe;
+    border-radius: 4px;
+    background: var(--primary-subtle);
+    color: var(--primary);
+    font-size: 11.5px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
 .tech-item {
     display: inline-flex;
     align-items: center;
@@ -2101,7 +2115,7 @@ html.sidebar-preload-collapsed .sidebar .user-avatar {
 
 .session-card-title-row {
     display: grid;
-    grid-template-columns: minmax(260px, 330px) minmax(0, 1fr);
+    grid-template-columns: minmax(260px, 330px) minmax(0, max-content) max-content;
     align-items: center;
     gap: 8px;
 }
@@ -2848,7 +2862,7 @@ pre, .json-box, .code-box {
     background: var(--bg-surface);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
-    padding: 24px;
+    padding: 20px;
     box-shadow: var(--shadow-sm);
 }
 
@@ -2857,7 +2871,7 @@ pre, .json-box, .code-box {
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    margin-bottom: 24px;
+    margin-bottom: 14px;
     padding-bottom: 12px;
     border-bottom: 1px solid var(--border);
 }
@@ -2868,6 +2882,140 @@ pre, .json-box, .code-box {
     color: var(--text-secondary);
     letter-spacing: 0;
     margin: 0;
+    white-space: nowrap;
+}
+
+.visit-block + .visit-block {
+    margin-top: 18px;
+}
+
+.visit-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 10px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: var(--bg-subtle);
+    font-size: 12.5px;
+}
+
+.visit-head-date {
+    color: var(--text-primary);
+    font-weight: 700;
+}
+
+.visit-head-details {
+    color: var(--text-muted);
+}
+
+/* One line per event, on a thin timeline running through the icons. */
+.visit-steps {
+    position: relative;
+    margin: 6px 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.visit-steps::before {
+    content: "";
+    position: absolute;
+    top: 18px;
+    bottom: 18px;
+    left: 99px;
+    width: 1px;
+    background: var(--border);
+}
+
+.visit-step {
+    display: grid;
+    grid-template-columns: 82px 22px minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 6px;
+    padding: 9px 10px 9px 0;
+    border-radius: 6px;
+    font-size: 13px;
+}
+
+.visit-step:hover {
+    background: var(--bg-subtle);
+}
+
+.visit-step-time {
+    padding-top: 2px;
+    color: var(--text-muted);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+}
+
+.visit-step-icon {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: var(--radius-full);
+    background: var(--bg-surface);
+    box-shadow: 0 0 0 1px var(--border);
+    color: var(--text-muted);
+}
+
+.visit-step.is-event .visit-step-icon {
+    color: var(--warning);
+}
+
+.visit-step-main {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 3px 8px;
+    min-width: 0;
+    padding-top: 1px;
+}
+
+.visit-step-title {
+    color: var(--text-primary);
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.visit-step-context {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text-muted);
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.visit-step-props {
+    grid-column: 3 / -1;
+    margin-top: 2px;
+}
+
+.visit-step-props[hidden] {
+    display: none;
+}
+
+.visit-step-link {
+    text-decoration: none;
+}
+
+.visit-step-link:hover,
+.visit-step-link:focus-visible {
+    color: var(--primary);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.visit-step-duration {
+    padding-top: 2px;
+    color: var(--text-muted);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
 }
 
 .journey-controls {
@@ -3178,15 +3326,15 @@ pre, .json-box, .code-box {
     background: var(--bg-surface);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
-    padding: 24px;
+    padding: 20px;
     box-shadow: var(--shadow-sm);
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 16px;
 }
 
 .session-meta-top-box {
-    padding-bottom: 18px;
+    padding-bottom: 16px;
     border-bottom: 1px solid var(--border);
     display: flex;
     flex-direction: column;
@@ -3228,7 +3376,6 @@ pre, .json-box, .code-box {
     white-space: nowrap;
 }
 
-.session-summary-date { font-size: 12px; line-height: 1.6; }
 
 .session-meta-id-row {
     display: flex;
@@ -3237,9 +3384,26 @@ pre, .json-box, .code-box {
 }
 
 .session-meta-id-title {
-    font-size: 15px;
-    font-weight: 800;
+    display: block;
+    overflow: hidden;
     color: var(--text-primary);
+    font-size: 13px;
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.session-identity {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.session-identity-text {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
 }
 
 .session-live-pulse-dot {
@@ -3263,8 +3427,8 @@ pre, .json-box, .code-box {
 .session-meta-section {
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    padding-bottom: 16px;
+    gap: 8px;
+    padding-bottom: 14px;
     border-bottom: 1px solid var(--border);
 }
 
@@ -3653,6 +3817,8 @@ pre, .json-box, .code-box {
     .journey-header { align-items: flex-start; flex-direction: column; }
     .journey-controls { width: 100%; }
     .journey-search { width: auto; flex: 1; }
+    .visit-step { grid-template-columns: 62px 22px minmax(0, 1fr) auto; }
+    .visit-steps::before { left: 79px; }
     .journey-step-top, .timeline-header { align-items: flex-start; flex-direction: column; gap: 3px; }
     .props-row { align-items: flex-start; flex-direction: column; gap: 4px; padding: 10px 12px; }
     .props-key { width: auto; }

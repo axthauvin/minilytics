@@ -162,7 +162,7 @@ test('MCP initialize negotiates the protocol and notifications get 202', { skip:
 test('MCP lists read-only tools with their input schema', { skip: !hasPhp }, async () => {
   const { body } = await mcp('tools/list', {});
   const names = body.result.tools.map((tool) => tool.name);
-  for (const name of ['list_sites', 'get_overview', 'get_timeseries', 'get_top_pages', 'get_top_referrers', 'get_top_events', 'get_countries', 'get_environment', 'get_acquisition', 'get_event_details', 'get_funnel']) {
+  for (const name of ['list_sites', 'get_overview', 'get_timeseries', 'get_top_pages', 'get_top_referrers', 'get_top_events', 'get_countries', 'get_environment', 'get_acquisition', 'get_event_details', 'get_funnel', 'get_sessions', 'get_journey', 'get_blocked_traffic']) {
     assert.ok(names.includes(name), `missing ${name}`);
   }
   for (const tool of body.result.tools) {
@@ -196,6 +196,29 @@ test('MCP tools return the site analytics', { skip: !hasPhp }, async () => {
 
   const channels = await callTool('get_acquisition', { site_id: 'private_site', report: 'channels' });
   assert.equal(channels.data.values[0].name, 'Direct');
+});
+
+test('MCP reads individual visits, journeys and blocked traffic', { skip: !hasPhp }, async () => {
+  const { data } = await callTool('get_sessions', { site_id: 'private_site' });
+  assert.equal(data.visits.length, 2);
+  const converted = data.visits.find((visit) => visit.visit_id === 's1');
+  assert.equal(converted.visitor_id, 'v1');
+  assert.deepEqual(converted.steps.map((step) => step.page && !step.event ? step.page : step.event), ['/pricing', 'Signup']);
+  assert.deepEqual(converted.steps[1].properties, { plan: 'pro' });
+  assert.doesNotMatch(JSON.stringify(data), /"ip(_address|_hash)?"\s*:/, 'No IP address is ever exposed.');
+
+  const one = await callTool('get_sessions', { site_id: 'private_site', visit_id: 's2' });
+  assert.equal(one.data.visit.pageviews, 2);
+  assert.equal(one.data.visit.events, 3);
+
+  const journey = await callTool('get_journey', { site_id: 'private_site', entry: { page: '/pricing' }, exit: { event: 'Signup' } });
+  assert.equal(journey.data.entered, 2);
+  assert.equal(journey.data.completed, 1);
+  assert.deepEqual(journey.data.top_paths, [{ steps: ['Event Signup'], visits: 1 }]);
+
+  const blocked = await callTool('get_blocked_traffic', { site_id: 'private_site' });
+  assert.equal(blocked.data.total, 0);
+  assert.deepEqual(blocked.data.robots, []);
 });
 
 test('MCP searches pages and events by name', { skip: !hasPhp }, async () => {

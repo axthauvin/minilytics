@@ -30,7 +30,17 @@
             </div>
         </div>
 
-        <!-- Square 2: Visits (Sessions) -->
+        <!-- Square 2: Returning visitors -->
+        <div class="umami-stat-card" title="Visitors who had already come in an earlier visit. Visitors are recognised for a calendar month at most.">
+            <span class="umami-stat-label">Returning visitors</span>
+            <div class="umami-stat-value" id="statReturningVisitors">0</div>
+            <div class="umami-stat-delta neutral" id="deltaReturningBadge">
+                <span class="delta-arrow">–</span>
+                <span class="delta-text" id="deltaReturningText">0%</span>
+            </div>
+        </div>
+
+        <!-- Square 3: Visits (Sessions) -->
         <div class="umami-stat-card">
             <span class="umami-stat-label">Visits</span>
             <div class="umami-stat-value" id="statSessions">0</div>
@@ -40,7 +50,7 @@
             </div>
         </div>
 
-        <!-- Square 3: Views (Pageviews) -->
+        <!-- Square 4: Views (Pageviews) -->
         <div class="umami-stat-card">
             <span class="umami-stat-label">Views</span>
             <div class="umami-stat-value" id="statPageviews">0</div>
@@ -50,7 +60,7 @@
             </div>
         </div>
 
-        <!-- Square 4: Bounce Rate -->
+        <!-- Square 5: Bounce Rate -->
         <div class="umami-stat-card">
             <span class="umami-stat-label">Bounce rate</span>
             <div class="umami-stat-value" id="statBounceRate">0%</div>
@@ -60,7 +70,7 @@
             </div>
         </div>
 
-        <!-- Square 5: Visit Duration -->
+        <!-- Square 6: Visit Duration -->
         <div class="umami-stat-card">
             <span class="umami-stat-label">Visit duration</span>
             <div class="umami-stat-value" id="statDuration">0s</div>

@@ -126,8 +126,7 @@ test("tracker auto-records a pageview and custom events on the script origin", a
     assert.deepEqual(await payload(beacons[0].body), {
         site_id: "demo",
         site_key: "test-write-key",
-        session_id: "00000000000040008000000000000000",
-        visitor_id: "00000000000040008000000000000000",
+        session_id: null,
         name: "pageview",
         data: {
             path: "/demo.html",
@@ -215,7 +214,7 @@ test("tracker explains the local opt-out and does not send an event", () => {
     });
 });
 
-test("strict mode sends a page-scoped event despite GPC without using web storage", async () => {
+test("strict mode sends an event without any identifier despite GPC, and without web storage", async () => {
     const { beacons, context } = loadTracker({
         navigator: { globalPrivacyControl: true },
     });
@@ -224,18 +223,22 @@ test("strict mode sends a page-scoped event despite GPC without using web storag
     const event = await payload(beacons[0].body);
     assert.equal(event.data.tracking_mode, "strict");
     assert.equal(event.data.screen, "1440×900");
-    assert.equal(event.session_id, event.visitor_id);
+    assert.equal(event.session_id, null);
+    assert.equal("visitor_id" in event, false);
     assert.equal(context.sessionStorage.values.size, 0);
     assert.equal(context.localStorage.values.size, 0);
 });
 
-test("enriched mode waits for consent and remains blocked by GPC", () => {
+test("enriched mode waits for consent and remains blocked by GPC", async () => {
     const pending = loadTracker({
         attributes: { "data-privacy-mode": "enriched" },
     });
     assert.equal(pending.beacons.length, 0);
     assert.equal(pending.context.minilytics.consent(), true);
     assert.equal(pending.beacons.length, 1);
+    const event = await payload(pending.beacons[0].body);
+    assert.equal(event.session_id, "00000000000040008000000000000000");
+    assert.equal("visitor_id" in event, false);
 
     const protectedBrowser = loadTracker({
         attributes: { "data-privacy-mode": "enriched" },

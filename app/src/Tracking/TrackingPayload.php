@@ -14,7 +14,6 @@ final class TrackingPayload
         private readonly string $rawName,
         public readonly array $data,
         public readonly string $sessionId,
-        public readonly string $visitorId,
     ) {}
 
     public static function fromJson(string $json): self
@@ -29,7 +28,6 @@ final class TrackingPayload
             $payload['name'],
             $payload['data'],
             self::identifier($payload['session_id'] ?? ''),
-            self::identifier($payload['visitor_id'] ?? ''),
         );
     }
 

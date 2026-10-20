@@ -51,6 +51,8 @@ $formatDurationLabel = static function (int $seconds): string {
     return implode(' ', $parts);
 };
 
+$avatarUrl = static fn(string $seed): string => 'https://api.dicebear.com/10.x/glyphs/svg?seed=' . rawurlencode($seed);
+
 try {
     if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'OPTIONS') {
         http_response_code(204);
@@ -67,7 +69,16 @@ try {
         }
         $cleanSite = SiteRegistry::requireId($siteId);
         $db = Connections::forSite($cleanSite);
-        $delete = $db->prepare('DELETE FROM user_activity WHERE session_id = :session_id');
+        // The dashboard shows a visitor's visits together, so they are deleted together.
+        $visitorStmt = $db->prepare('SELECT visitor_id FROM user_activity WHERE session_id = :session_id AND visitor_id IS NOT NULL LIMIT 1');
+        $visitorStmt->bindValue(':session_id', $sessionId, SQLITE3_TEXT);
+        $visitor = $visitorStmt->execute()->fetchArray(SQLITE3_NUM)[0] ?? null;
+        if (is_string($visitor) && $visitor !== '') {
+            $delete = $db->prepare('DELETE FROM user_activity WHERE visitor_id = :visitor OR session_id = :session_id');
+            $delete->bindValue(':visitor', $visitor, SQLITE3_TEXT);
+        } else {
+            $delete = $db->prepare('DELETE FROM user_activity WHERE session_id = :session_id');
+        }
         $delete->bindValue(':session_id', $sessionId, SQLITE3_TEXT);
         $delete->execute();
         $deleted = $db->changes();
@@ -84,123 +95,109 @@ try {
 
     $specificSessionId = trim($_GET['session_id'] ?? '');
 
-    // 1. Single session details drill-down
+    // 1. A visitor's journey: every visit of the visitor behind this session, oldest first.
     if ($specificSessionId !== '') {
-        $detailSql = "SELECT id, session_id, visitor_id, action, timestamp 
-                      FROM user_activity 
-                      WHERE session_id = :session_id 
-                      ORDER BY timestamp ASC, id ASC";
-        $dStmt = $db->prepare($detailSql);
-        $dStmt->bindValue(':session_id', $specificSessionId, SQLITE3_TEXT);
-        $res = $dStmt->execute();
-
-        $events = [];
-        $foundEvents = false;
-        $firstTime = null;
-        $lastTime = null;
-        $entryPage = null;
-        $referrer = null;
-        $browser = 'Other';
-        $os = 'Other';
-        $device = 'Desktop';
-        $country = 'Unknown';
-        $countryCode = 'UN';
-        $city = '';
-        $trackingMode = 'unknown';
-        $pageviewCount = 0;
-        $customEventCount = 0;
-
-        while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
-            $foundEvents = true;
-            $act = json_decode($row['action'], true) ?: [];
-            $ts = strtotime($row['timestamp'] . ' UTC');
-
-            if ($firstTime === null) {
-                $firstTime = $ts;
-                $data = $act['data'] ?? [];
-                if (!empty($data['path'])) {
-                    $entryPage = $data['path'];
-                }
-                if (!empty($data['referrer'])) {
-                    $referrer = $data['referrer'];
-                }
-                if (!empty($data['browser'])) {
-                    $browser = $data['browser'];
-                }
-                if (!empty($data['os'])) {
-                    $os = $data['os'];
-                }
-                if (!empty($data['device'])) {
-                    $device = $data['device'];
-                }
-                if (!empty($data['country'])) {
-                    $country = $data['country'];
-                }
-                if (!empty($data['country_code'])) {
-                    $countryCode = $data['country_code'];
-                }
-                if (!empty($data['city'])) {
-                    $city = $data['city'];
-                }
-                if (!empty($data['_ml_tracking_mode'])) {
-                    $trackingMode = $data['_ml_tracking_mode'];
-                }
-            }
-            $lastTime = $ts;
-
-            $offsetSec = $ts - $firstTime;
-            $offsetLabel = '+' . $formatDurationLabel($offsetSec);
-
-            // Engagement is an internal timing signal, not a visitor-facing event.
-            if (($act['name'] ?? '') === '_ml_engaged') {
-                continue;
-            }
-            if (($act['name'] ?? '') === 'pageview') {
-                $pageviewCount++;
-            } else {
-                $customEventCount++;
-            }
-            $events[] = [
-                'id' => (int) $row['id'],
-                'name' => $act['name'] ?? 'unknown',
-                'site_id' => $act['site_id'] ?? $cleanSite,
-                'data' => $act['data'] ?? [],
-                'timestamp' => $row['timestamp'],
-                'offset_label' => $offsetLabel,
-                'offset_seconds' => $offsetSec,
-            ];
-        }
-
-        if (!$foundEvents) {
+        $visitorStmt = $db->prepare('SELECT visitor_id FROM user_activity WHERE session_id = :session_id ORDER BY timestamp DESC, id DESC LIMIT 1');
+        $visitorStmt->bindValue(':session_id', $specificSessionId, SQLITE3_TEXT);
+        $visitorRow = $visitorStmt->execute()->fetchArray(SQLITE3_ASSOC);
+        if (!is_array($visitorRow)) {
             http_response_code(404);
             echo json_encode(['error' => 'Session not found']);
             exit;
         }
+        $visitorId = (string) ($visitorRow['visitor_id'] ?: $specificSessionId);
 
-        $durationSec = max(0, $lastTime - $firstTime);
-        $durationLabel = $formatDurationLabel($durationSec);
+        // Visitors are recognised for a month at most, so this stays small.
+        $dStmt = $db->prepare('SELECT id, session_id, action, timestamp FROM user_activity WHERE '
+            . ($visitorRow['visitor_id'] ? 'visitor_id = :visitor' : 'session_id = :visitor')
+            . ' ORDER BY timestamp ASC, id ASC LIMIT 2000');
+        $dStmt->bindValue(':visitor', $visitorId, SQLITE3_TEXT);
+        $res = $dStmt->execute();
+
+        $events = [];
+        $visits = [];
+        $context = [];
+        while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
+            $act = json_decode($row['action'], true) ?: [];
+            $data = $act['data'] ?? [];
+            $name = $act['name'] ?? 'unknown';
+            $sid = (string) $row['session_id'];
+            $ts = strtotime($row['timestamp'] . ' UTC');
+
+            if (!isset($visits[$sid])) {
+                $visits[$sid] = [
+                    'session_id' => $sid,
+                    'visit_number' => count($visits) + 1,
+                    'started_at' => $row['timestamp'],
+                    'ended_at' => $row['timestamp'],
+                    'start_ts' => $ts,
+                    'duration_seconds' => 0,
+                    'entry_page' => $data['path'] ?? '/',
+                    'referrer' => !empty($data['referrer']) ? $data['referrer'] : 'Direct',
+                    'pageview_count' => 0,
+                    'event_count' => 0,
+                ];
+                // The device and location shown are those of the latest visit.
+                $context = $data;
+            }
+            $visit = &$visits[$sid];
+            $visit['ended_at'] = $row['timestamp'];
+            $visit['duration_seconds'] = max(0, $ts - $visit['start_ts']);
+            $offsetSec = $ts - $visit['start_ts'];
+
+            // Engagement is an internal timing signal, not a visitor-facing event.
+            if ($name === '_ml_engaged') {
+                unset($visit);
+                continue;
+            }
+            $visit[$name === 'pageview' ? 'pageview_count' : 'event_count']++;
+            $events[] = [
+                'id' => (int) $row['id'],
+                'session_id' => $sid,
+                'visit_number' => $visit['visit_number'],
+                'name' => $name,
+                'site_id' => $act['site_id'] ?? $cleanSite,
+                'data' => $data,
+                'timestamp' => $row['timestamp'],
+                'offset_label' => '+' . $formatDurationLabel($offsetSec),
+                'offset_seconds' => $offsetSec,
+            ];
+            unset($visit);
+        }
+
+        $visits = array_values(array_map(static function (array $visit) use ($formatDurationLabel): array {
+            unset($visit['start_ts']);
+            return $visit + ['duration_label' => $formatDurationLabel($visit['duration_seconds'])];
+        }, $visits));
+        $first = $visits[0];
+        $latest = $visits[count($visits) - 1];
+        $durationSec = array_sum(array_column($visits, 'duration_seconds'));
+        $current = array_values(array_filter($visits, static fn(array $visit): bool => $visit['session_id'] === $specificSessionId))[0] ?? $latest;
 
         echo json_encode([
             'success' => true,
             'session' => [
                 'session_id' => $specificSessionId,
-                'started_at' => gmdate('Y-m-d H:i:s', $firstTime),
-                'ended_at' => gmdate('Y-m-d H:i:s', $lastTime),
+                'visitor_id' => $visitorId,
+                'started_at' => $first['started_at'],
+                'ended_at' => $latest['ended_at'],
                 'duration_seconds' => $durationSec,
-                'duration_label' => $durationLabel,
+                'duration_label' => $formatDurationLabel($durationSec),
                 'event_count' => count($events),
-                'pageview_count' => $pageviewCount,
-                'custom_event_count' => $customEventCount,
-                'entry_page' => $entryPage ?: '/',
-                'referrer' => $referrer ?: 'Direct',
-                'browser' => $browser,
-                'os' => $os,
-                'device' => $device,
-                'country' => $country,
-                'country_code' => $countryCode,
-                'city' => $city,
-                'tracking_mode' => $trackingMode,
-                'avatar_url' => "https://api.dicebear.com/10.x/glyphs/svg?seed=" . rawurlencode($specificSessionId),
+                'pageview_count' => array_sum(array_column($visits, 'pageview_count')),
+                'custom_event_count' => array_sum(array_column($visits, 'event_count')),
+                'entry_page' => $current['entry_page'],
+                'referrer' => $current['referrer'],
+                'browser' => $context['browser'] ?? 'Other',
+                'os' => $context['os'] ?? 'Other',
+                'device' => $context['device'] ?? 'Desktop',
+                'country' => $context['country'] ?? 'Unknown',
+                'country_code' => $context['country_code'] ?? 'UN',
+                'city' => $context['city'] ?? '',
+                'tracking_mode' => $context['_ml_tracking_mode'] ?? 'unknown',
+                'visit_count' => count($visits),
+                'visits' => $visits,
+                'avatar_url' => $avatarUrl($visitorId),
                 'events' => $events,
             ],
         ], JSON_UNESCAPED_SLASHES);
@@ -241,7 +238,7 @@ try {
     }
 
     if ($search !== '') {
-        $where[] = "(session_id LIKE :search OR action LIKE :search)";
+        $where[] = "(session_id LIKE :search OR visitor_id LIKE :search OR action LIKE :search)";
         $params[':search'] = "%{$search}%";
     }
 
@@ -253,19 +250,11 @@ try {
 
     $whereClause = implode(' AND ', $where);
 
-    // Total distinct sessions count
-    $cntSql = "SELECT COUNT(DISTINCT session_id) FROM user_activity WHERE {$whereClause}";
-    $cntStmt = $db->prepare($cntSql);
-    foreach ($params as $k => $v) {
-        $cntStmt->bindValue($k, $v, SQLITE3_TEXT);
-    }
-    $totalSessions = (int) $cntStmt->execute()->fetchArray(SQLITE3_NUM)[0];
-
-    // Aggregated sessions
-    $sessSql = "
-        SELECT 
+    // One row per visitor, their visits merged, and the latest activity first.
+    $visitsSql = "
+        SELECT
             session_id,
-            COALESCE(MAX(visitor_id), session_id) as visitor_id,
+            COALESCE(MAX(visitor_id), session_id) as visitor_key,
             MIN(timestamp) as started_at,
             MAX(timestamp) as last_active_at,
             SUM(CASE WHEN json_extract(action, '$.name') = 'pageview' THEN 1 ELSE 0 END) as pageview_count,
@@ -274,7 +263,26 @@ try {
         FROM user_activity
         WHERE {$whereClause}
         GROUP BY session_id
-        ORDER BY started_at DESC, last_active_at DESC
+    ";
+
+    $cntStmt = $db->prepare("SELECT COUNT(DISTINCT visitor_key) FROM ({$visitsSql}) visits");
+    foreach ($params as $k => $v) {
+        $cntStmt->bindValue($k, $v, SQLITE3_TEXT);
+    }
+    $totalVisitors = (int) $cntStmt->execute()->fetchArray(SQLITE3_NUM)[0];
+
+    $sessSql = "
+        SELECT
+            visitor_key as visitor_id,
+            COUNT(*) as visit_count,
+            MIN(started_at) as started_at,
+            MAX(last_active_at) as last_active_at,
+            SUM(pageview_count) as pageview_count,
+            SUM(event_count) as event_count,
+            SUM(duration_seconds) as duration_seconds
+        FROM ({$visitsSql}) visits
+        GROUP BY visitor_key
+        ORDER BY last_active_at DESC, started_at DESC
         LIMIT :limit OFFSET :offset
     ";
     $sStmt = $db->prepare($sessSql);
@@ -287,7 +295,12 @@ try {
 
     $sessions = [];
     while ($sr = $sRes->fetchArray(SQLITE3_ASSOC)) {
-        $sId = $sr['session_id'];
+        $visitorId = (string) $sr['visitor_id'];
+        // The card opens on the visitor's latest visit, whose device and location it shows.
+        $latestStmt = $db->prepare("SELECT session_id FROM user_activity WHERE (visitor_id = :visitor OR session_id = :visitor) AND timestamp <= :end_date ORDER BY timestamp DESC, id DESC LIMIT 1");
+        $latestStmt->bindValue(':visitor', $visitorId, SQLITE3_TEXT);
+        $latestStmt->bindValue(':end_date', $endDateStr, SQLITE3_TEXT);
+        $sId = (string) ($latestStmt->execute()->fetchArray(SQLITE3_NUM)[0] ?? $visitorId);
         $durSec = max(0, (int) $sr['duration_seconds']);
         $durLabel = $formatDurationLabel($durSec);
 
@@ -349,8 +362,8 @@ try {
             }
         }
 
-        // Relative time ago calculation
-        $startTs = strtotime($sr['started_at'] . ' UTC');
+        // Relative time ago calculation, from the latest activity
+        $startTs = strtotime($sr['last_active_at'] . ' UTC');
         $diff = time() - $startTs;
         if ($diff < 60) {
             $timeAgo = 'just now';
@@ -364,7 +377,8 @@ try {
 
         $sessions[] = [
             'session_id' => $sId,
-            'visitor_id' => $sr['visitor_id'] ?? $sId,
+            'visitor_id' => $visitorId,
+            'visit_count' => (int) $sr['visit_count'],
             'started_at' => $sr['started_at'],
             'last_active_at' => $sr['last_active_at'],
             'time_ago' => $timeAgo,
@@ -380,7 +394,7 @@ try {
             'country' => $country,
             'country_code' => strtoupper($countryCode),
             'city' => $city,
-            'avatar_url' => "https://api.dicebear.com/10.x/glyphs/svg?seed=" . rawurlencode($sId),
+            'avatar_url' => $avatarUrl($visitorId),
             'flow' => $flow,
         ];
     }
@@ -409,10 +423,10 @@ try {
     echo json_encode([
         'success' => true,
         'sessions' => $sessions,
-        'total' => $totalSessions,
+        'total' => $totalVisitors,
         'page' => $page,
         'limit' => $limit,
-        'total_pages' => max(1, (int) ceil($totalSessions / $limit)),
+        'total_pages' => max(1, (int) ceil($totalVisitors / $limit)),
         'available_events' => $availableEvents,
     ], JSON_UNESCAPED_SLASHES);
 

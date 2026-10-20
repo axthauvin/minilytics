@@ -293,6 +293,7 @@ const OverviewPage = {
 
     // Core overview metrics
     setTxt("statVisitors", this.formatNumber(sum.visitors || 0));
+    setTxt("statReturningVisitors", this.formatNumber(sum.returning_visitors || 0));
     setTxt("statSessions", this.formatNumber(sum.sessions || 0));
     setTxt("statPageviews", this.formatNumber(sum.pageviews || 0));
     setTxt("statBounceRate", `${sum.bounce_rate || 0}%`);
@@ -304,6 +305,11 @@ const OverviewPage = {
         "deltaVisitorsBadge",
         "deltaVisitorsText",
         sum.deltas.visitors || "0",
+      );
+      this.applyDeltaBadge(
+        "deltaReturningBadge",
+        "deltaReturningText",
+        sum.deltas.returning_visitors || "0",
       );
       this.applyDeltaBadge(
         "deltaSessionsBadge",
@@ -353,12 +359,11 @@ const OverviewPage = {
     const isHourly = timeseries.every((point) => Number(point.interval_hours) === 1);
     if (!isHourly) return timeseries;
 
-    const timeFormatter = new Intl.DateTimeFormat(undefined, { hour: "numeric", hour12: true });
     const dateFormatter = new Intl.DateTimeFormat(undefined, {
       weekday: "long", year: "numeric", month: "long", day: "numeric",
     });
     const fullFormatter = new Intl.DateTimeFormat(undefined, {
-      weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "numeric", minute: "2-digit",
+      weekday: "long", year: "numeric", month: "long", day: "numeric", ...TimeFormat.options(),
     });
 
     return timeseries.map((point) => {
@@ -367,7 +372,7 @@ const OverviewPage = {
       const date = new Date(timestamp * 1000);
       return {
         ...point,
-        label: timeFormatter.format(date),
+        label: TimeFormat.hour(date),
         date_label: dateFormatter.format(date),
         full_label: fullFormatter.format(date),
       };

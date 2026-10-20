@@ -12,6 +12,7 @@ use Minilytics\Analytics\Reports\EventsReport;
 use Minilytics\Analytics\Reports\FunnelsReport;
 use Minilytics\Analytics\Reports\PagesReport;
 use Minilytics\Analytics\Reports\ReferrersReport;
+use Minilytics\Analytics\Reports\SessionsReport;
 use Minilytics\Analytics\Reports\SummaryReport;
 use Minilytics\Analytics\Reports\TimeseriesReport;
 use Minilytics\Database\Connections;
@@ -106,6 +107,16 @@ final class SiteAnalytics
     }
 
     /**
+     * @see FunnelsReport::journey()
+     *
+     * @param list<array{type: string, value: string}> $steps
+     */
+    public function journey(array $steps, bool $allTime = false): array
+    {
+        return (new FunnelsReport($this->query))->journey($steps, $allTime);
+    }
+
+    /**
      * @see FunnelsReport::saved()
      * @return list<array{id: int, name: string, kind: string, steps: list<array{type: string, value: string, label?: string}>}>
      */
@@ -133,6 +144,18 @@ final class SiteAnalytics
     public function acquisition(): array
     {
         return (new AcquisitionReport($this->query))->get();
+    }
+
+    /** @see SessionsReport::latest() */
+    public function latestVisits(int $limit = 10): array
+    {
+        return (new SessionsReport($this->query))->latest($limit);
+    }
+
+    /** @see SessionsReport::visit() */
+    public function visit(string $visitId): ?array
+    {
+        return (new SessionsReport($this->query))->visit($visitId);
     }
 
     /** @see BotsReport::summary() */

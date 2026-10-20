@@ -92,7 +92,7 @@ if [ ! -f "${STAGING_DIR}/.htaccess" ] && [ -f "${APP_DIR}/.htaccess" ]; then
 fi
 
 # Safety check: ensure no database or secret file leaked into staging
-LEAKED=$(find "${STAGING_DIR}" \( -name "*.db" -o -name "*.db-wal" -o -name "*.db-shm" -o -name "sites.json" -o -name "database.json" -o -name ".tracking-secret" \) -print)
+LEAKED=$(find "${STAGING_DIR}" \( -name "*.db" -o -name "*.db-wal" -o -name "*.db-shm" -o -name "sites.json" -o -name "database.json" -o -name ".tracking-secret" -o -name ".visitor-salt" \) -print)
 if [ -n "${LEAKED}" ]; then
     echo "ERROR: Data file detected in staging: ${LEAKED}" >&2
     exit 1

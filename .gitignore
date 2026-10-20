@@ -8,6 +8,7 @@ app/data/*.db-shm
 app/data/sites.json
 app/data/database.json
 app/data/.tracking-secret
+app/data/.visitor-salt
 demo.html
 *.zip
 *.tar.gz

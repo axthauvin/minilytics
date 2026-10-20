@@ -36,6 +36,15 @@ const SettingsPage = {
     const copySnippet = document.getElementById('copyTrackingSnippet');
     if (copySnippet) copySnippet.addEventListener('click', () => ClipboardHelper.copy(document.getElementById('trackingSnippet').value, copySnippet));
     document.querySelectorAll('[data-settings-tab]').forEach((tab) => tab.addEventListener('click', () => this.selectTab(tab.dataset.settingsTab)));
+    const timeFormat = document.getElementById('timeFormatSelect');
+    if (timeFormat) {
+      timeFormat.value = TimeFormat.get();
+      timeFormat.addEventListener('change', () => {
+        TimeFormat.set(timeFormat.value);
+        const feedback = document.getElementById('timeFormatFeedback');
+        if (feedback) { feedback.className = 'settings-feedback settings-success'; feedback.textContent = `Saved. Times now read ${TimeFormat.time(new Date())}.`; }
+      });
+    }
     const databaseDriver = document.getElementById('databaseDriver');
     if (databaseDriver) databaseDriver.addEventListener('change', () => this.toggleDatabaseFields());
     const databaseForm = document.getElementById('databaseSettingsForm');

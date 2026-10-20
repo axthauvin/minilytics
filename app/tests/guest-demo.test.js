@@ -40,6 +40,8 @@ function prepareInstall() {
     foreach (['demo_site', 'private_site'] as $id) {
       $db = Minilytics\\Database\\Connections::forSite($id);
       $db->exec("INSERT INTO user_activity (session_id, visitor_id, action) VALUES ('s1', 'v1', '{\\"name\\":\\"pageview\\",\\"data\\":{\\"path\\":\\"/\\"}}')");
+      $db->exec("INSERT INTO user_activity (session_id, visitor_id, action) VALUES ('s1', 'v1', '{\\"name\\":\\"_ml_engaged\\",\\"data\\":{\\"path\\":\\"/\\"}}')");
+      $db->exec("INSERT INTO user_activity (session_id, visitor_id, action) VALUES ('s1', 'v1', '{\\"name\\":\\"signup\\",\\"data\\":{\\"path\\":\\"/\\"}}')");
     }
   `], { env: phpEnv() });
   assert.equal(setup.status, 0, setup.stdout.toString() + setup.stderr.toString());
@@ -81,6 +83,12 @@ for (const endpoint of readEndpoints) {
     assert.equal(res.status, 401);
   });
 }
+
+test('funnel steps never offer internal events', { skip: !hasPhp }, async () => {
+  const body = await (await api('funnels.php?site_id=demo_site')).json();
+  assert.deepEqual(body.events, ['signup']);
+  assert.deepEqual(body.pages, ['/']);
+});
 
 test('guests only list public sites, without tracking secrets', { skip: !hasPhp }, async () => {
   const res = await api('sites.php');

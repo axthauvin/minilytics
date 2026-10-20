@@ -52,15 +52,16 @@ test('local GeoIP database is refreshed without an API key or visitor lookup', (
   assert.doesNotMatch(geo, /api[_-]?key|token=/i);
 });
 
-test('sessions API deletes only a selected session and UI requires confirmation', () => {
+test('sessions API deletes a selected visitor and UI requires confirmation', () => {
   const api = read('dashboard/src/api/sessions.php');
   const client = read('dashboard/src/assets/js/api.js');
   const sessions = read('dashboard/src/assets/js/sessions.js');
 
   assert.match(api, /Auth::requireAdmin\(\)/);
+  assert.match(api, /DELETE FROM user_activity WHERE visitor_id = :visitor OR session_id = :session_id/);
   assert.match(api, /DELETE FROM user_activity WHERE session_id = :session_id/);
   assert.match(client, /async deleteSession\(sessionId, siteId/);
-  assert.match(sessions, /Delete session \$\{sessionId\} and all of its events/);
+  assert.match(sessions, /Delete this visitor and all of their visits/);
 });
 
 test('session previews separate page views from custom events', () => {
@@ -77,8 +78,8 @@ test('session details expose page views and custom events separately', () => {
   const api = read('dashboard/src/api/sessions.php');
   const page = read('templates/dashboard/pages/sessions.php');
 
-  assert.match(api, /'pageview_count' => \$pageviewCount/);
-  assert.match(api, /'custom_event_count' => \$customEventCount/);
+  assert.match(api, /'pageview_count' => array_sum\(array_column\(\$visits, 'pageview_count'\)\)/);
+  assert.match(api, /'custom_event_count' => array_sum\(array_column\(\$visits, 'event_count'\)\)/);
   assert.match(page, /id="detailPageviews"/);
   assert.match(page, /id="detailLastActivity"/);
 });

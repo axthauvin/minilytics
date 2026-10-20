@@ -55,7 +55,7 @@ Some versions of Antigravity do not finish signing in. Use an [access token](#ac
 
 ## What assistants can see
 
-Assistants read the same reports as the dashboard, such as visitors, pages, referrers, events, funnels, countries and devices, for any period. They only see totals, never individual visits or visitors.
+Assistants read the same reports as the dashboard, such as visitors, pages, referrers, events, funnels, journeys, countries, devices and blocked bots, for any period. They can also read individual visits, as on the Sessions page: the pages viewed and events triggered, with the country and device. Visits stay anonymous: assistants never see an IP address, and a visitor's code changes every month.
 
 ## Manage access
 
