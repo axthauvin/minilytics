@@ -30,10 +30,16 @@ const App = {
       .catch(() => {});
   },
 
-  /** Marks the Settings link and the Updates tab when a newer Minilytics release is available (administrators only). */
+  /**
+   * Marks the Settings link and the Updates tab when a newer Minilytics release
+   * is available (administrators only), and says what changed after an update.
+   */
   checkForUpdate() {
-    if (this.isGuest || window.MINILYTICS_ADMIN !== true) return;
-    Api.getVersion().then((data) => this.showUpdateDots(data.update_available)).catch(() => {});
+    if (this.isGuest) return;
+    Api.getVersion().then((data) => {
+      if (window.MINILYTICS_ADMIN === true) this.showUpdateDots(data.update_available);
+      Changelog.showWhatsNewOnce(data.installed);
+    }).catch(() => {});
   },
 
   showUpdateDots(visible) {

@@ -126,6 +126,8 @@ Your PHP installation needs the `pdo_mysql` extension, which most hosting provid
 
 **Settings → Updates** shows the version you use and tells you when a new one is available. A small dot also appears next to **Settings** when it is time to update.
 
+Before you install, it lists what changed in each release since yours. After an update, a **What's new** window shows these changes once, the next time the dashboard is opened in each browser.
+
 ![Settings → Updates, showing that a new version is available](../assets/settings-updates.png)
 
 To update, click **Install** in **Settings → Updates**. Minilytics keeps a backup of its current files, installs the new version, and reloads the page. It is unavailable for a few seconds while this happens.

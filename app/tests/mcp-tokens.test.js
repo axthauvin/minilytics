@@ -127,6 +127,7 @@ test('a token never opens the dashboard endpoints, writes or administration', { 
     ['tokens.php', { headers: bearer() }],
     ['tracking.php', { headers: bearer() }],
     ['version.php', { headers: bearer() }],
+    ['changelog.php', { headers: bearer() }],
     ['tokens.php', { method: 'POST', headers: json, body: JSON.stringify({ name: 'escalation' }) }],
   ];
   for (const [endpoint, init] of attempts) {

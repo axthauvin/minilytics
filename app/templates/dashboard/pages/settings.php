@@ -157,9 +157,13 @@
             </dl>
             <p class="settings-feedback" id="updateStatus" role="status"></p>
             <ul class="update-problems" id="updateProblems" hidden></ul>
+            <div class="update-changelog" id="updateChangelog" hidden>
+                <h4>What's new</h4>
+                <div id="updateChangelogList"></div>
+            </div>
             <div class="update-actions">
                 <button type="button" class="btn-primary" id="updateInstall" hidden>Install update</button>
-                <a class="btn-outline" id="updateReleaseLink" href="https://github.com/axthauvin/minilytics/releases" target="_blank" rel="noopener" hidden>See what's new ↗</a>
+                <a class="btn-outline" id="updateReleaseLink" href="https://github.com/axthauvin/minilytics/releases" target="_blank" rel="noopener" hidden>Release on GitHub ↗</a>
                 <a class="btn-outline" id="updateManualLink" href="<?= \Minilytics\Http\Docs::url('operations', 'updating-by-hand') ?>" target="_blank" rel="noopener" hidden>How to update by hand ↗</a>
                 <button type="button" class="btn-outline" id="updateCheckNow" hidden>Check now</button>
                 <button type="button" class="btn-outline" id="updateRollback" hidden>Go back to the previous version</button>

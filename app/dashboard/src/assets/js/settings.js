@@ -214,8 +214,18 @@ const SettingsPage = {
       else if (isAdmin) message = 'You are using the latest version.';
       status.className = 'settings-feedback' + (tone ? ` settings-${tone}` : '');
       status.textContent = message;
+      this.loadChangelog(data, refresh);
     } catch (e) { status.className = 'settings-feedback settings-error'; status.textContent = e.message; }
     finally { if (button) button.disabled = false; }
+  },
+
+  /** What the available update brings, from the release notes on GitHub. */
+  async loadChangelog(data, refresh) {
+    const section = document.getElementById('updateChangelog');
+    if (!data.update_available) { section.hidden = true; return; }
+    const changelog = await Api.getChangelog({ after: data.installed, upTo: data.latest.version, refresh }).catch(() => null);
+    section.hidden = !changelog || !changelog.releases.length;
+    if (!section.hidden) document.getElementById('updateChangelogList').replaceChildren(Changelog.render(changelog.releases));
   },
 
   /** Installs the latest release, one step per request so that no request runs long (see Updater.php). */
