@@ -573,7 +573,7 @@ const SessionsPage = {
   visitHeader(visit) {
     const date = this.parseTimestamp(visit.started_at);
     const when = date
-      ? `${date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })} · ${date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}`
+      ? `${date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })} · ${TimeFormat.time(date)}`
       : "";
     const pages = Number(visit.pageview_count) || 0;
     const events = Number(visit.event_count) || 0;
@@ -599,7 +599,7 @@ const SessionsPage = {
     const context = isPageview ? data.title || "" : data.path || "";
     const date = this.parseTimestamp(evt.timestamp);
     const time = date
-      ? date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", second: "2-digit", hour12: true })
+      ? TimeFormat.time(date, { seconds: true })
       : evt.timestamp;
     const duration = this.formatStepDuration(visitEvents, visitEvents.indexOf(evt), visit);
 
@@ -700,12 +700,7 @@ const SessionsPage = {
         day: "numeric",
         month: "short",
       });
-      const timeStr = d.toLocaleTimeString("en-US", {
-        hour: "numeric",
-        minute: "2-digit",
-        second: "2-digit",
-        hour12: true,
-      });
+      const timeStr = TimeFormat.time(d, { seconds: true });
       return `${dayMonth}, ${timeStr}`;
     } catch (e) {
       return ts;

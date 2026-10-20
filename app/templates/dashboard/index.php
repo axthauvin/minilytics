@@ -124,6 +124,7 @@ use Minilytics\Http\View;
     <!-- Lucide Icons & Icon Helper -->
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="<?= Asset::url('/dashboard/src/assets/js/icons.js') ?>"></script>
+    <script src="<?= Asset::url('/dashboard/src/assets/js/time-format.js') ?>"></script>
 
     <!-- Modular Application Scripts -->
     <script src="<?= Asset::url('/dashboard/src/assets/js/api.js') ?>"></script>

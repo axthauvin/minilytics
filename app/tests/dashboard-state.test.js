@@ -27,10 +27,12 @@ function loadApp(initialStorage) {
   return context;
 }
 
-function loadOverview() {
-  const context = { Intl, Date, window: {} };
+function loadOverview(initialStorage) {
+  const context = { Intl, Date, localStorage: storage(initialStorage), window: {} };
   context.window = context;
-  vm.runInNewContext(fs.readFileSync(path.join(root, 'dashboard/src/assets/js/overview.js'), 'utf8'), context);
+  for (const file of ['time-format.js', 'overview.js']) {
+    vm.runInNewContext(fs.readFileSync(path.join(root, 'dashboard/src/assets/js', file), 'utf8'), context);
+  }
   return context.OverviewPage;
 }
 
@@ -49,15 +51,16 @@ test('restores a persisted custom reporting range', () => {
   });
 });
 
-test('formats hourly overview labels in the browser timezone', () => {
-  const overview = loadOverview();
+test('formats hourly overview labels in the browser timezone and the chosen time format', () => {
   const timestamp = 1791216000;
-  const [point] = overview.localizeHourlyChartLabels([
+  const date = new Date(timestamp * 1000);
+  const label = (format) => loadOverview({ minilytics_time_format: format }).localizeHourlyChartLabels([
     { timestamp, interval_hours: 1, label: '12 AM', full_label: 'UTC label' },
-  ]);
+  ])[0];
 
-  assert.equal(point.label, new Intl.DateTimeFormat(undefined, { hour: 'numeric', hour12: true }).format(new Date(timestamp * 1000)));
-  assert.notEqual(point.full_label, 'UTC label');
+  assert.equal(label('12h').label, date.toLocaleTimeString('en-US', { hour: 'numeric', hourCycle: 'h12' }));
+  assert.equal(label('24h').label, `${String(date.getHours()).padStart(2, '0')}:00`);
+  assert.notEqual(label('24h').full_label, 'UTC label');
 });
 
 test('does not relabel daily overview buckets', () => {
