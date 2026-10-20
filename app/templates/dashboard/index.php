@@ -119,6 +119,7 @@ use Minilytics\Http\View;
     <?php include View::path('dashboard/modals/payload'); ?>
     <?php include View::path('dashboard/modals/session-detail'); ?>
     <?php include View::path('dashboard/modals/add-site'); ?>
+    <?php include View::path('dashboard/modals/whats-new'); ?>
 
     <!-- Lucide Icons & Icon Helper -->
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -136,6 +137,7 @@ use Minilytics\Http\View;
     <script src="<?= Asset::url('/dashboard/src/assets/js/events.js') ?>"></script>
     <script src="<?= Asset::url('/dashboard/src/assets/js/sessions.js') ?>"></script>
     <script src="<?= Asset::url('/dashboard/src/assets/js/funnels.js') ?>"></script>
+    <script src="<?= Asset::url('/dashboard/src/assets/js/changelog.js') ?>"></script>
     <script src="<?= Asset::url('/dashboard/src/assets/js/settings.js') ?>"></script>
     <script src="<?= Asset::url('/dashboard/src/assets/js/app.js') ?>"></script>
 </body>

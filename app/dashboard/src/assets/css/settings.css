@@ -443,3 +443,25 @@
 .update-actions [hidden] { display: none; }
 .update-problems { margin: 0 0 16px; padding-left: 20px; color: var(--text-muted); font-size: 14px; line-height: 1.5; }
 .update-problems[hidden] { display: none; }
+
+/* Release notes: Settings → Updates and the "What's new" window */
+.update-changelog { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border-light); }
+.update-changelog[hidden] { display: none; }
+.update-changelog h4 { margin: 0 0 12px; font-size: 13px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; }
+.changelog { list-style: none; margin: 0; padding: 0; display: grid; gap: 18px; }
+.changelog-release-header { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px; }
+.changelog-version { font-weight: 700; color: var(--text-primary); text-decoration: none; font-variant-numeric: tabular-nums; }
+.changelog-version:hover { color: var(--primary); }
+.changelog-date { font-size: 12px; color: var(--text-muted); }
+.changelog-changes { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.changelog-changes li { display: flex; align-items: flex-start; gap: 10px; font-size: 14px; line-height: 1.45; }
+.changelog-text { color: var(--text-primary); text-decoration: none; min-width: 0; overflow-wrap: anywhere; }
+a.changelog-text:hover { color: var(--primary); text-decoration: underline; }
+.changelog-badge { flex: none; width: 68px; padding: 2px 0; border-radius: var(--radius-full); font-size: 11px; font-weight: 600; text-align: center; margin-top: 1px; }
+.changelog-badge-new { background: var(--primary-subtle); color: var(--primary); }
+.changelog-badge-fixed { background: var(--success-bg); color: var(--success-text); }
+.changelog-badge-improved { background: var(--bg-sidebar-hover); color: var(--text-secondary); }
+.changelog-empty { color: var(--text-muted); }
+.whats-new-dialog { max-width: 560px; display: flex; flex-direction: column; max-height: calc(100dvh - 32px); }
+.whats-new-body { overflow-y: auto; }
+.whats-new-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 20px; border-top: 1px solid var(--border-light); }

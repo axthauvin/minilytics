@@ -299,6 +299,14 @@ const Api = {
     if (!res.ok || data.error) throw new Error(data.error || `HTTP ${res.status}`); return data;
   },
 
+  /** What changed in the releases newer than `after`, up to and including `upTo`. */
+  async getChangelog({ after = null, upTo = null, refresh = false } = {}) {
+    const params = new URLSearchParams();
+    if (after) params.set("after", after); if (upTo) params.set("up_to", upTo); if (refresh) params.set("refresh", "1");
+    const res = await apiFetch(`${this.base}/changelog.php?${params}`); const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.error) throw new Error(data.error || `HTTP ${res.status}`); return data;
+  },
+
   /** Runs one step of an update from the dashboard: check, download, backup, install or rollback. */
   async runUpdateStep(step) {
     const res = await apiFetch(`${this.base}/update.php`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ step }) });
