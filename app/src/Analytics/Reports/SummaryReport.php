@@ -6,7 +6,7 @@ namespace Minilytics\Analytics\Reports;
 
 use Minilytics\Analytics\ReportQuery;
 
-/** Headline numbers: visitors, visits, pageviews, bounce rate and duration, live visitors. */
+/** Headline numbers: visitors, returning visitors, visits, pageviews, bounce rate and duration, live visitors. */
 final class SummaryReport
 {
     private ?array $result = null;
@@ -35,12 +35,13 @@ final class SummaryReport
         $visits = $this->visitMetrics($start, $end, '<=');
 
         $visitors = (int) ($totals['visitors'] ?? 0);
+        $returning = $this->returningVisitors($start, $end, '<=');
         $pageviews = (int) ($totals['pageviews'] ?? 0);
         $sessions = (int) ($visits['total_sessions'] ?? $totals['sessions'] ?? 0);
         $avgDuration = round((float) ($visits['avg_duration'] ?? 0), 1);
         $bounceRate = $sessions > 0 ? round((float) ($visits['bounce_rate'] ?? 0), 1) : 0.0;
 
-        $deltas = ['visitors' => null, 'sessions' => null, 'pageviews' => null, 'bounce_rate' => null, 'duration' => null];
+        $deltas = ['visitors' => null, 'returning_visitors' => null, 'sessions' => null, 'pageviews' => null, 'bounce_rate' => null, 'duration' => null];
         $previous = null;
         if (!$this->query->period->isAll()) {
             $previousStart = gmdate('Y-m-d H:i:s', $this->query->period->previousStart());
@@ -49,8 +50,10 @@ final class SummaryReport
             $previousSessions = (int) ($previousVisits['total_sessions'] ?? 0);
             $previousBounceRate = $previousSessions > 0 ? round((float) ($previousVisits['bounce_rate'] ?? 0), 1) : 0.0;
             $previousDuration = round((float) ($previousVisits['avg_duration'] ?? 0), 1);
+            $previousReturning = $this->returningVisitors($previousStart, $start, '<');
             $previous = [
                 'visitors' => (int) ($previousTotals['visitors'] ?? 0),
+                'returning_visitors' => $previousReturning,
                 'sessions' => $previousSessions,
                 'pageviews' => (int) ($previousTotals['pageviews'] ?? 0),
                 'events' => (int) ($previousTotals['total_events'] ?? 0),
@@ -59,6 +62,7 @@ final class SummaryReport
             ];
             $deltas = [
                 'visitors' => self::formatDiff($visitors - (int) ($previousTotals['visitors'] ?? 0)),
+                'returning_visitors' => self::formatDiff($returning - $previousReturning),
                 'sessions' => self::formatDiff($sessions - $previousSessions),
                 'pageviews' => self::formatDiff($pageviews - (int) ($previousTotals['pageviews'] ?? 0)),
                 'bounce_rate' => self::formatDiff(round($bounceRate - $previousBounceRate, 1), '%'),
@@ -68,6 +72,7 @@ final class SummaryReport
 
         return $this->result = [
             'visitors' => $visitors,
+            'returning_visitors' => $returning,
             'sessions' => $sessions,
             'session_count' => (int) ($totals['sessions'] ?? 0),
             'pageviews' => $pageviews,
@@ -93,6 +98,27 @@ final class SummaryReport
             WHERE timestamp >= :start_date AND timestamp {$endOperator} :end_date {$this->query->condition()}
         ", [':start_date' => $start, ':end_date' => $end]);
         return $rows[0] ?? [];
+    }
+
+    /**
+     * Visitors active between two dates who had already come before, in an
+     * earlier visit. Visitors are recognised for a month at most, since their
+     * identifier changes with it.
+     */
+    private function returningVisitors(string $start, string $end, string $endOperator): int
+    {
+        // An identifier lives one calendar month at most, so earlier visits are never further back.
+        $historyStart = gmdate('Y-m-d H:i:s', (int) strtotime($start . ' UTC') - 31 * 86400);
+        $rows = $this->query->rows("
+            SELECT COUNT(*) AS returning_visitors FROM (
+                SELECT visitor_id
+                FROM user_activity
+                WHERE visitor_id IS NOT NULL AND timestamp >= :history_start AND timestamp {$endOperator} :end_date {$this->query->condition()}
+                GROUP BY visitor_id
+                HAVING MAX(timestamp) >= :start_date AND COUNT(DISTINCT session_id) > 1
+            ) returning_visitors
+        ", [':history_start' => $historyStart, ':start_date' => $start, ':end_date' => $end]);
+        return (int) ($rows[0]['returning_visitors'] ?? 0);
     }
 
     /**

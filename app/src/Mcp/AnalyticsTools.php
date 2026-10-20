@@ -44,7 +44,7 @@ final class AnalyticsTools
             self::report(
                 'get_overview',
                 'Traffic overview',
-                'Visitors, visits, pageviews, events, bounce rate (%), average visit duration (seconds) and visitors active in the last 5 minutes. A visit ends after 30 minutes without activity, so one visitor can have several visits. Each metric comes with the value of the previous period of the same length, the absolute change and the change in percent (null when there is no previous value to compare with).',
+                'Visitors, returning visitors (seen in an earlier visit, within the same calendar month at most), visits, pageviews, events, bounce rate (%), average visit duration (seconds) and visitors active in the last 5 minutes. A visit ends after 30 minutes without activity, so one visitor can have several visits. Each metric comes with the value of the previous period of the same length, the absolute change and the change in percent (null when there is no previous value to compare with).',
                 static fn(SiteAnalytics $analytics): array => ['summary' => self::overview($analytics->summary())],
             ),
             self::report(
@@ -237,6 +237,7 @@ final class AnalyticsTools
     {
         $current = [
             'visitors' => $summary['visitors'],
+            'returning_visitors' => $summary['returning_visitors'],
             'visits' => $summary['sessions'],
             'pageviews' => $summary['pageviews'],
             'events' => $summary['events'],

@@ -293,6 +293,7 @@ const OverviewPage = {
 
     // Core overview metrics
     setTxt("statVisitors", this.formatNumber(sum.visitors || 0));
+    setTxt("statReturningVisitors", this.formatNumber(sum.returning_visitors || 0));
     setTxt("statSessions", this.formatNumber(sum.sessions || 0));
     setTxt("statPageviews", this.formatNumber(sum.pageviews || 0));
     setTxt("statBounceRate", `${sum.bounce_rate || 0}%`);
@@ -304,6 +305,11 @@ const OverviewPage = {
         "deltaVisitorsBadge",
         "deltaVisitorsText",
         sum.deltas.visitors || "0",
+      );
+      this.applyDeltaBadge(
+        "deltaReturningBadge",
+        "deltaReturningText",
+        sum.deltas.returning_visitors || "0",
       );
       this.applyDeltaBadge(
         "deltaSessionsBadge",
