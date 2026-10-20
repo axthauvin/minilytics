@@ -117,7 +117,8 @@ try {
     $events = [];
     $er = $db->query("SELECT DISTINCT json_extract(action, '$.name') AS name FROM user_activity ORDER BY name");
     while ($r = $er->fetchArray(SQLITE3_ASSOC)) {
-        if ($r['name'] && $r['name'] !== 'pageview') {
+        // Internal signals such as _ml_engaged are not something a visitor does.
+        if ($r['name'] && $r['name'] !== 'pageview' && !str_starts_with($r['name'], '_ml_')) {
             $events[] = $r['name'];
         }
     }
