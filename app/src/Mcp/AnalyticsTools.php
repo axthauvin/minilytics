@@ -136,6 +136,40 @@ final class AnalyticsTools
                 ['report' => ['type' => 'string', 'enum' => self::ACQUISITION_REPORTS]] + $limit,
                 ['report'],
             ),
+            self::report(
+                'get_sessions',
+                'Visits',
+                'Individual anonymous visits, newest first: when they started, how long they lasted, where the visitor came from, their country and device, and every page they viewed and event they triggered, in order, with the events\' properties. visit_number tells a returning visitor apart (2 for their second visit). Visitors are recognised for a calendar month at most and no IP address is ever stored. Pass visit_id to read one visit in full.',
+                static function (SiteAnalytics $analytics, array $args): array {
+                    $visitId = self::text($args, 'visit_id');
+                    if ($visitId === null) {
+                        return ['visits' => $analytics->latestVisits(min(50, self::limit($args)))];
+                    }
+                    return ['visit' => $analytics->visit($visitId) ?? throw new InvalidArgumentException('No visit has the ID "' . $visitId . '": use a visit_id from get_sessions.')];
+                },
+                [
+                    'visit_id' => ['type' => 'string', 'description' => 'One visit to read in full, from a previous get_sessions answer.'],
+                    'limit' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 50, 'default' => 10, 'description' => 'Maximum number of visits to return.'],
+                ],
+            ),
+            self::report(
+                'get_journey',
+                'Journey between two steps',
+                'The paths visits took from an entry step to an exit step (each a page or a custom event): how many visits went through the entry, how many then reached the exit, and the most common paths from the entry to the exit (the 3 most common next steps at each point, up to 12 steps). Pass entry and exit, or the name of a journey saved in the dashboard. Without either, lists the saved journeys.',
+                static fn(SiteAnalytics $analytics, array $args): array => self::journey($analytics, $args),
+                [
+                    'entry' => ['type' => 'object', 'description' => 'A page path or an exact event name, e.g. {"page": "/"}.', 'properties' => ['page' => ['type' => 'string'], 'event' => ['type' => 'string']], 'additionalProperties' => false],
+                    'exit' => ['type' => 'object', 'description' => 'A page path or an exact event name, e.g. {"event": "Signup"}.', 'properties' => ['page' => ['type' => 'string'], 'event' => ['type' => 'string']], 'additionalProperties' => false],
+                    'journey' => ['type' => 'string', 'description' => 'Name of a journey saved in the dashboard.'],
+                ],
+            ),
+            self::report(
+                'get_blocked_traffic',
+                'Blocked traffic',
+                'Requests kept out of the analytics: bots and crawlers by category (search engines, AI crawlers, monitoring, scripts...) with the named robots that sent them, the reasons they were rejected and the websites they targeted, plus internal traffic and visitors who left without interacting. Filters do not apply to it.',
+                static fn(SiteAnalytics $analytics, array $args): array => self::blockedTraffic($analytics->botActivity(), self::limit($args)),
+                $limit,
+            ),
         ];
     }
 
@@ -292,6 +326,76 @@ final class AnalyticsTools
             ];
         }
         return ['steps' => $rows];
+    }
+
+    /** The paths between a journey's entry and exit; the saved journeys when neither is given. */
+    private static function journey(SiteAnalytics $analytics, array $args): array
+    {
+        $saved = array_values(array_filter($analytics->savedFunnels(), static fn(array $funnel): bool => $funnel['kind'] === 'journey'));
+        $name = self::text($args, 'journey');
+        if ($name !== null) {
+            $match = array_values(array_filter($saved, static fn(array $journey): bool => strcasecmp($journey['name'], $name) === 0));
+            if ($match === []) {
+                throw new InvalidArgumentException('No saved journey is named "' . $name . '". Saved journeys: ' . (implode(', ', array_column($saved, 'name')) ?: 'none') . '.');
+            }
+            $steps = array_slice($match[0]['steps'], 0, 2);
+        } elseif (isset($args['entry']) || isset($args['exit'])) {
+            $steps = self::funnelSteps([$args['entry'] ?? null, $args['exit'] ?? null]);
+        } else {
+            return ['saved_journeys' => array_map(static fn(array $journey): array => [
+                'name' => $journey['name'],
+                'entry' => self::describeStep($journey['steps'][0] ?? []),
+                'exit' => self::describeStep($journey['steps'][1] ?? []),
+            ], $saved)];
+        }
+
+        $journey = $analytics->journey($steps);
+        $exit = self::describeStep($steps[1]);
+        // Every branch of the tree stops at the exit: a path is complete when it reaches it.
+        $paths = [];
+        $walk = static function (array $node, array $path) use (&$walk, &$paths, $exit): void {
+            foreach ($node['children'] ?? [] as $child) {
+                $next = [...$path, self::describeStep($child)];
+                if ($next[count($next) - 1] === $exit) {
+                    $paths[] = ['steps' => $next, 'visits' => $child['count']];
+                } else {
+                    $walk($child, $next);
+                }
+            }
+        };
+        $walk($journey['tree'], []);
+        usort($paths, static fn(array $a, array $b): int => $b['visits'] <=> $a['visits']);
+
+        return [
+            'entry' => self::describeStep($steps[0]),
+            'exit' => $exit,
+            'entered' => $journey['entered'],
+            'completed' => $journey['completed'],
+            'completion_rate' => $journey['entered'] > 0 ? round($journey['completed'] / $journey['entered'] * 100, 1) : 0,
+            'top_paths' => array_slice($paths, 0, 10),
+        ];
+    }
+
+    /** The bot report without its hourly series and raw user agents. */
+    private static function blockedTraffic(array $bots, int $limit): array
+    {
+        return [
+            'total' => $bots['total'],
+            'internal_traffic' => $bots['internal'],
+            'left_without_interacting' => $bots['left'],
+            'categories' => array_values(array_filter(
+                array_map(static fn(array $category): array => ['category' => $category['category'], 'requests' => $category['count']], $bots['categories']),
+                static fn(array $category): bool => $category['requests'] > 0,
+            )),
+            'robots' => array_slice(array_map(static fn(array $bot): array => [
+                'name' => $bot['name'],
+                'operator' => $bot['operator'] ?? '',
+                'category' => $bot['category'],
+                'requests' => $bot['count'],
+            ], $bots['bots']), 0, $limit),
+            'reasons' => array_slice($bots['reasons'], 0, $limit),
+            'targeted_websites' => array_slice($bots['origins'], 0, $limit),
+        ];
     }
 
     /** @return list<array{type: string, value: string}> */

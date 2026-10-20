@@ -53,82 +53,6 @@ function cleanSteps(mixed $steps): array
     }
     return $out;
 }
-/** Adds one completed journey to the tree, counting each step along its branch. */
-function addJourneyPath(array &$tree, array $branchPath): void
-{
-    $node = & $tree;
-    $node['count']++;
-    foreach ($branchPath as $branch) {
-        if (!isset($node['children'][$branch['key']])) {
-            $node['children'][$branch['key']] = ['type' => $branch['type'], 'value' => $branch['value'], 'count' => 0, 'children' => []];
-        }
-        $node = & $node['children'][$branch['key']];
-        $node['count']++;
-    }
-    unset($node);
-}
-function analyzeJourneySources(DatabaseConnection $db, array $steps, string $start, string $end): array
-{
-    if (count($steps) < 2) {
-        return ['entered' => 0, 'completed' => 0, 'tree' => ['count' => 0, 'children' => []]];
-    }
-    $stmt = $db->prepare("SELECT session_id, action FROM user_activity WHERE timestamp >= :start AND timestamp <= :end ORDER BY session_id, timestamp, id");
-    $stmt->bindValue(':start', $start, SQLITE3_TEXT);
-    $stmt->bindValue(':end', $end, SQLITE3_TEXT);
-    $res = $stmt->execute();
-    $entry = $steps[0];
-    $exit = $steps[1];
-    $currentSession = null;
-    $hasEntered = false;
-    $capturing = false;
-    $branchPath = [];
-    $entered = 0;
-    $completed = 0;
-    $tree = ['count' => 0, 'children' => []];
-    while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
-        if ($currentSession !== $row['session_id']) {
-            $currentSession = $row['session_id'];
-            $hasEntered = false;
-            $capturing = false;
-            $branchPath = [];
-        }
-        $action = json_decode($row['action'], true) ?: [];
-        $name = (string) ($action['name'] ?? '');
-        $actionPath = (string) ($action['data']['path'] ?? '');
-        $isEntry = $entry['type'] === 'pageview' ? ($name === 'pageview' && $actionPath === $entry['value']) : ($name === $entry['value']);
-        if ($isEntry && !$hasEntered) {
-            $entered++;
-            $hasEntered = true;
-            $capturing = true;
-            $branchPath = [];
-            continue;
-        }
-        if (!$capturing) {
-            continue;
-        }
-        $type = $name === 'pageview' ? 'pageview' : 'event';
-        $value = $type === 'pageview' ? ($actionPath ?: '/') : $name;
-        if ($value === '') {
-            continue;
-        }
-        $branchPath[] = ['key' => $type . '|' . $value, 'type' => $type, 'value' => $value];
-        $isExit = $exit['type'] === 'pageview' ? ($name === 'pageview' && $actionPath === $exit['value']) : ($name === $exit['value']);
-        if ($isExit) {
-            $completed++;
-            addJourneyPath($tree, $branchPath);
-            $capturing = false;
-        } elseif (count($branchPath) >= 12) {
-            $capturing = false;
-        }
-    }
-    $trimTree = function (array $node) use (&$trimTree): array {
-        $children = array_values($node['children'] ?? []);
-        usort($children, fn($a, $b) => $b['count'] <=> $a['count']);
-        $node['children'] = array_map($trimTree, array_slice($children, 0, 3));
-        return $node;
-    };
-    return ['entered' => $entered, 'completed' => $completed, 'tree' => $trimTree($tree)];
-}
 try {
     $payload = json_decode(file_get_contents('php://input'), true) ?: [];
     $siteId = $_GET['site_id'] ?? $payload['site_id'] ?? null;
@@ -182,9 +106,9 @@ try {
         $kind = $row['kind'] ?: 'funnel';
         $item = ['id' => (int) $row['id'], 'name' => $row['name'], 'kind' => $kind, 'steps' => $steps, 'progress' => $analytics->funnelProgress($steps)];
         if ($kind === 'journey') {
-            $item['journey'] = analyzeJourneySources($db, $steps, $start, $end);
+            $item['journey'] = $analytics->journey($steps);
             if (($item['journey']['completed'] ?? 0) === 0) {
-                $item['journey']['fallback'] = analyzeJourneySources($db, $steps, '1970-01-01 00:00:00', '9999-12-31 23:59:59');
+                $item['journey']['fallback'] = $analytics->journey($steps, true);
             }
         } $items[] = $item;
     }
