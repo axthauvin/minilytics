@@ -83,7 +83,7 @@
                 </svg>
                 <span>Back to sessions</span>
             </button>
-            <button type="button" class="btn-delete-session" id="btnDeleteSession">Delete session</button>
+            <button type="button" class="btn-delete-session" id="btnDeleteSession">Delete visitor</button>
         </div>
 
         <!-- 2-Column Inspection Grid -->
@@ -98,7 +98,7 @@
                                 <circle cx="11" cy="11" r="8"></circle>
                                 <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                             </svg>
-                            <input type="search" id="sessionEventSearch" placeholder="Search events" autocomplete="off">
+                            <input type="search" id="sessionEventSearch" placeholder="Search pages and events" autocomplete="off">
                         </label>
                         <button type="button" class="btn-journey-order" id="sessionEventOrder" aria-pressed="true" title="Show oldest events first">
                             <span id="sessionEventOrderLabel">Newest first</span>
@@ -119,28 +119,31 @@
             <!-- Right Column: Session information and context -->
             <div class="session-meta-sidebar-card">
                 <div class="session-meta-top-box">
-                    <div style="display: flex; align-items: center; gap: 14px; margin-bottom: 12px;">
+                    <div class="session-identity">
                         <div class="session-detail-avatar-wrap">
                             <img id="detailAvatarImg" src="" alt="Avatar" class="session-detail-avatar-img">
                             <span class="session-status-dot"></span>
                         </div>
-                        <div style="min-width: 0; flex: 1;">
-                            <div class="session-meta-id-row" style="margin-bottom: 4px;">
-                                <span class="session-meta-id-title font-mono" id="detailSessionId">...</span>
-                            </div>
+                        <div class="session-identity-text">
+                            <span class="session-meta-id-title font-mono" id="detailSessionId">...</span>
                             <div class="session-meta-geo-row" id="detailGeoRow">
                                 <span id="detailCountryFlag">🌐</span>
                                 <span id="detailCountryName">Unknown</span>
                             </div>
+                            <div class="session-meta-tech-row" id="detailTechRow"></div>
                         </div>
-                    </div>
-                    <div class="session-meta-tech-row" id="detailTechRow">
-                        <span id="detailOs">OS</span>,
-                        <span id="detailBrowser">Browser</span>
                     </div>
                 </div>
 
                 <div class="session-summary-grid">
+                    <div class="session-summary-card">
+                        <span class="session-summary-label">Visits</span>
+                        <strong class="session-summary-value" id="detailVisitCount">1</strong>
+                    </div>
+                    <div class="session-summary-card">
+                        <span class="session-summary-label">Time on site</span>
+                        <strong class="session-summary-value" id="detailDuration">0s</strong>
+                    </div>
                     <div class="session-summary-card">
                         <span class="session-summary-label">Page views</span>
                         <strong class="session-summary-value" id="detailPageviews">0</strong>
@@ -149,33 +152,16 @@
                         <span class="session-summary-label">Events</span>
                         <strong class="session-summary-value" id="detailEventCount">0</strong>
                     </div>
-                    <div class="session-summary-card">
-                        <span class="session-summary-label">Duration</span>
-                        <strong class="session-summary-value" id="detailDuration">0s</strong>
-                    </div>
-                    <div class="session-summary-card">
-                        <span class="session-summary-label">Last activity</span>
-                        <strong class="session-summary-value session-summary-date" id="detailLastActivity">–</strong>
-                    </div>
                 </div>
 
                 <div class="session-meta-section">
-                    <h4 class="meta-section-title">Session information</h4>
                     <div class="meta-field-row">
-                        <span class="meta-field-label">Started</span>
+                        <span class="meta-field-label">First seen</span>
                         <span class="meta-field-val" id="detailStartedAt">–</span>
                     </div>
                     <div class="meta-field-row">
-                        <span class="meta-field-label">Last activity</span>
-                        <span class="meta-field-val" id="detailLastActivityFull">–</span>
-                    </div>
-                    <div class="meta-field-row">
-                        <span class="meta-field-label">Referrer</span>
-                        <span class="meta-field-val" id="detailReferrer">Direct</span>
-                    </div>
-                    <div class="meta-field-row">
-                        <span class="meta-field-label">Locale</span>
-                        <span class="meta-field-val" id="detailLocale">en</span>
+                        <span class="meta-field-label">Last seen</span>
+                        <span class="meta-field-val" id="detailLastActivity">–</span>
                     </div>
                 </div>
 
@@ -186,12 +172,16 @@
                         <span class="meta-field-val" id="detailDevice">Desktop</span>
                     </div>
                     <div class="meta-field-row">
-                        <span class="meta-field-label">Screen resolution</span>
+                        <span class="meta-field-label">Screen</span>
                         <span class="meta-field-val" id="detailScreen">–</span>
                     </div>
                     <div class="meta-field-row">
                         <span class="meta-field-label">Viewport</span>
                         <span class="meta-field-val" id="detailViewport">–</span>
+                    </div>
+                    <div class="meta-field-row">
+                        <span class="meta-field-label">Language</span>
+                        <span class="meta-field-val" id="detailLocale">en</span>
                     </div>
                     <p class="session-consent-notice" id="detailConsentNotice" hidden></p>
                 </div>
