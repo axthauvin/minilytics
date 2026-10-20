@@ -634,8 +634,8 @@ const SessionsPage = {
         <span class="visit-step-time">${this.escapeHtml(time)}</span>
         <span class="visit-step-icon">${Icons.get(isPageview ? "file-text" : "zap", { size: 14 })}</span>
         <div class="visit-step-main">
-          <span class="visit-step-title">${this.escapeHtml(title)}</span>
-          ${context ? `<span class="visit-step-context">${this.escapeHtml(context)}</span>` : ""}
+          ${isPageview ? this.pageLink(data, title, "visit-step-title") : `<span class="visit-step-title">${this.escapeHtml(title)}</span>`}
+          ${context ? (isPageview ? `<span class="visit-step-context">${this.escapeHtml(context)}</span>` : this.pageLink(data, context, "visit-step-context")) : ""}
           ${propertiesToggle}
         </div>
         <span class="visit-step-duration" title="Time until the next event">${duration}</span>
@@ -740,6 +740,20 @@ const SessionsPage = {
     if (mins > 0 || hours > 0 || days > 0) parts.push(`${mins}m`);
     if (secs > 0 || parts.length === 0) parts.push(`${secs}s`);
     return parts.join(" ");
+  },
+
+  /** The page as a link that opens it on the website, when its address is known. */
+  pageLink(data, label, className) {
+    const host = String(data.hostname || "");
+    const path = String(data.path || "");
+    if (!/^[a-z0-9.-]+$/i.test(host) || !path.startsWith("/")) {
+      return `<span class="${className}">${this.escapeHtml(label)}</span>`;
+    }
+    // The tracker only sends the hostname: a page on the dashboard's own host keeps its port.
+    const local = /^(localhost|127\.)/.test(host) || host.endsWith(".localhost");
+    const origin = host === window.location.hostname ? window.location.origin : `${local ? "http" : "https"}://${host}`;
+    const url = `${origin}${path}`;
+    return `<a class="${className} visit-step-link" href="${this.escapeHtml(url)}" target="_blank" rel="noopener noreferrer" title="Open ${this.escapeHtml(url)}">${this.escapeHtml(label)}</a>`;
   },
 
   toggleStepProps(button) {

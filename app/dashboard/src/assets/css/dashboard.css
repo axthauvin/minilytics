@@ -3000,6 +3000,17 @@ pre, .json-box, .code-box {
     display: none;
 }
 
+.visit-step-link {
+    text-decoration: none;
+}
+
+.visit-step-link:hover,
+.visit-step-link:focus-visible {
+    color: var(--primary);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
 .visit-step-duration {
     padding-top: 2px;
     color: var(--text-muted);
