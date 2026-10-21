@@ -1,0 +1,389 @@
+<!doctype html>
+<!--
+  Charts shown by AI assistants supporting MCP Apps, next to the result of
+  get_timeseries, get_funnel and preview_funnel, drawn like the dashboard's.
+  McpServer serves this file as ui://minilytics/charts.html; the assistant runs
+  it in a sandboxed frame and talks to it over postMessage (JSON-RPC).
+  Self-contained: the sandbox loads nothing from the network.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Minilytics</title>
+<style>
+    :root {
+        --bg: #ffffff;
+        --text: #0f172a;
+        --text-secondary: #64748b;
+        --text-muted: #94a3b8;
+        --border: #e8edf3;
+        --grid: #f1f5f9;
+        --blue: #3b82f6;
+        --blue-strong: #2563eb;
+        --blue-subtle: #eff6ff;
+        --stripe: #e0e7ff;
+        --stripe-light: #f1f5ff;
+        --danger: #b91c1c;
+    }
+    :root[data-theme="dark"] {
+        --bg: #1f1f1e;
+        --text: #f1f5f9;
+        --text-secondary: #a1a1aa;
+        --text-muted: #71717a;
+        --border: #34343a;
+        --grid: #2b2b2e;
+        --blue-subtle: #1e293b;
+        --stripe: #253049;
+        --stripe-light: #1c2333;
+        --danger: #f87171;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; }
+    body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        font-size: 13px;
+        -webkit-font-smoothing: antialiased;
+    }
+    main { padding: 16px 18px; }
+    .note { margin: 0; color: var(--text-secondary); }
+    .note.error { color: var(--danger); }
+
+    /* Traffic over time, as on the Overview page */
+    .eyebrow { display: block; color: var(--text-muted); font-size: 11.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
+    .metrics { display: flex; flex-wrap: wrap; gap: 18px; margin: 4px 0 12px; }
+    .metric { display: inline-flex; align-items: center; gap: 6px; color: var(--text-muted); font-size: 12.5px; font-weight: 500; }
+    .metric i { width: 8px; height: 8px; border-radius: 50%; }
+    .metric b { color: var(--text); font-size: 20px; font-weight: 800; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+    .plot { position: relative; }
+    .plot svg { display: block; width: 100%; overflow: visible; }
+    .plot text { fill: var(--text-muted); font-size: 11px; }
+    .tooltip { position: absolute; top: 0; min-width: 190px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg); box-shadow: 0 16px 32px -10px rgba(15, 23, 42, 0.2), 0 6px 12px -6px rgba(15, 23, 42, 0.12); pointer-events: none; white-space: nowrap; }
+    .tooltip strong { display: block; margin-bottom: 6px; padding-bottom: 6px; border-bottom: 1px solid var(--border); font-size: 13px; font-weight: 700; }
+    .tooltip div { display: flex; align-items: center; gap: 8px; margin-top: 6px; color: var(--text-secondary); font-size: 13px; font-weight: 500; }
+    .tooltip div i { width: 12px; height: 12px; border-radius: 3px; }
+    .tooltip div b { margin-left: auto; color: var(--text); font-size: 14px; }
+
+    /* Funnels, as on the Funnels page */
+    .caption { color: var(--text-muted); font-size: 12px; }
+    h1 { margin: 3px 0 14px; font-size: 17px; font-weight: 700; letter-spacing: -0.02em; }
+    .flow { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
+    .stage { min-width: 0; padding: 0 14px; border-left: 1px solid var(--border); }
+    .stage:first-child { padding-left: 0; border-left: 0; }
+    .stage:last-child { padding-right: 0; }
+    .column { position: relative; display: flex; flex-direction: column; justify-content: flex-end; height: 150px; padding-top: 30px; }
+    .percent { position: absolute; top: 0; left: 0; color: var(--blue); font-size: 22px; font-weight: 800; letter-spacing: -0.05em; }
+    .slot { display: flex; flex: 1; align-items: flex-end; border-bottom: 1px solid var(--blue-subtle); }
+    .stack { position: relative; width: 100%; min-height: 6px; overflow: hidden; border-radius: 7px 7px 0 0; background: repeating-linear-gradient(-45deg, var(--stripe) 0, var(--stripe) 7px, var(--stripe-light) 7px, var(--stripe-light) 14px); }
+    .bar { position: absolute; bottom: 0; left: 0; width: 100%; min-height: 6px; border-radius: 5px 5px 0 0; background: linear-gradient(180deg, #60a5fa, #bfdbfe); }
+    .step { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 9px; align-items: center; margin-top: 12px; }
+    .step-number { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--blue-subtle); color: var(--blue-strong); font-size: 11px; font-weight: 800; }
+    .step-name strong, .step-name span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .step-name strong { font-size: 13px; }
+    .step-name span { margin-top: 1px; color: var(--text-muted); font-size: 11px; }
+    .visits { margin-top: 10px; color: var(--text-secondary); font-size: 11px; font-weight: 600; }
+    .visits strong { margin-right: 4px; color: var(--text); font-size: 17px; letter-spacing: -0.05em; }
+    footer { display: flex; align-items: center; justify-content: flex-end; gap: 14px; margin-top: 16px; }
+    footer .note { flex: 1; font-size: 12px; }
+    button { flex-shrink: 0; white-space: nowrap; min-height: 34px; padding: 0 14px; border: 0; border-radius: 9px; background: var(--blue-strong); color: #fff; font: 700 13px Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; cursor: pointer; box-shadow: 0 3px 8px rgba(37, 99, 235, 0.18); }
+    button:hover { background: #1d4ed8; }
+    button:disabled { opacity: 0.6; cursor: default; }
+    .saved { color: var(--blue-strong); font-weight: 700; }
+    ul { margin: 6px 0 0; padding: 0; list-style: none; }
+    li { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-top: 1px solid var(--border); }
+    li:first-child { border-top: 0; }
+    li span { color: var(--text-muted); font-size: 12px; white-space: nowrap; }
+</style>
+</head>
+<body>
+<main id="app"><p class="note">Loading…</p></main>
+<script>
+(() => {
+    const SERIES = [
+        { key: 'pageviews', label: 'Views', color: '#60a5fa', fill: ['rgba(147, 197, 253, 0.5)', 'rgba(191, 219, 254, 0.06)'], width: 2.75 },
+        { key: 'visitors', label: 'Visitors', color: '#a78bfa', fill: ['rgba(196, 181, 253, 0.42)', 'rgba(221, 214, 254, 0.05)'], width: 2.5 },
+    ];
+    const RANGES = { today: 'Today', '24h': 'Last 24 hours', '7d': 'Last 7 days', '30d': 'Last 30 days', '90d': 'Last 90 days', '6m': 'Last 6 months', '180d': 'Last 6 months', all: 'All time' };
+    const app = document.getElementById('app');
+    let host = {};
+    let result = null;
+
+    // JSON-RPC over postMessage with the assistant hosting this frame.
+    let nextId = 1;
+    const pending = new Map();
+    const send = (message) => window.parent.postMessage({ jsonrpc: '2.0', ...message }, '*');
+    const request = (method, params) => new Promise((resolve, reject) => {
+        const id = nextId++;
+        pending.set(id, { resolve, reject });
+        send({ id, method, params });
+    });
+    const notify = (method, params) => send({ method, params });
+
+    window.addEventListener('message', (event) => {
+        const message = event.data;
+        if (event.source !== window.parent || !message || message.jsonrpc !== '2.0') return;
+        if (!message.method) {
+            const call = pending.get(message.id);
+            pending.delete(message.id);
+            if (call) message.error ? call.reject(new Error(message.error.message)) : call.resolve(message.result);
+            return;
+        }
+        switch (message.method) {
+            case 'ui/notifications/tool-result':
+                result = message.params || {};
+                render();
+                break;
+            case 'ui/notifications/tool-cancelled':
+                if (!result) app.innerHTML = '<p class="note">Cancelled.</p>';
+                break;
+            case 'ui/notifications/host-context-changed':
+                applyContext(message.params || {});
+                break;
+            case 'ui/resource-teardown':
+            case 'ping':
+                send({ id: message.id, result: {} });
+                break;
+            default:
+                if (message.id !== undefined) send({ id: message.id, error: { code: -32601, message: 'Method not found' } });
+        }
+    });
+
+    function applyContext(context) {
+        if (context.theme) document.documentElement.dataset.theme = context.theme;
+        const background = context.styles?.variables?.['--color-background-primary'];
+        if (background) document.documentElement.style.setProperty('--bg', background);
+    }
+
+    // The assistant sizes the frame to the page: after each render, and whenever it changes.
+    const reportSize = () => notify('ui/notifications/size-changed', { height: Math.ceil(document.documentElement.getBoundingClientRect().height) });
+    new ResizeObserver(reportSize).observe(document.documentElement);
+
+    request('ui/initialize', {
+        appInfo: { name: 'Minilytics charts', version: '1.0.0' },
+        appCapabilities: {},
+        protocolVersion: '2026-01-26',
+    }).then((initialized) => {
+        host = initialized?.hostCapabilities || {};
+        applyContext(initialized?.hostContext || {});
+        notify('ui/notifications/initialized', {});
+        if (result) render();
+    }).catch(() => {});
+
+    const html = (value) => String(value).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const number = (value) => Number(value).toLocaleString();
+    const utc = (timestamp, options) => new Date(timestamp * 1000).toLocaleString('en-US', { timeZone: 'UTC', ...options });
+
+    function data() {
+        if (result.structuredContent) return result.structuredContent;
+        try { return JSON.parse(result.content?.[0]?.text || ''); } catch { return null; }
+    }
+
+    function render() {
+        if (!result) return;
+        const report = data();
+        if (result.isError || !report) {
+            app.innerHTML = `<p class="note error">${html(result.content?.[0]?.text || 'The analytics could not be read.')}</p>`;
+        } else if (report.timeseries) {
+            renderTimeseries(report);
+        } else if (report.steps) {
+            renderFunnel(report);
+        } else if (report.saved_funnels) {
+            renderSavedFunnels(report.saved_funnels);
+        }
+        reportSize();
+    }
+
+    function periodName(period) {
+        if (!period) return '';
+        if (RANGES[period.range]) return RANGES[period.range];
+        const day = (iso) => utc(Date.parse(iso) / 1000, { month: 'short', day: 'numeric' });
+        return `${day(period.start)} – ${day(period.end)}`;
+    }
+
+    // Traffic over time
+
+    function renderTimeseries(report) {
+        const slots = report.timeseries;
+        const hourly = slots.length > 1 && slots[1].timestamp - slots[0].timestamp <= 3600;
+        const totals = report.totals || {};
+        app.innerHTML = `<span class="eyebrow">Traffic · ${html(periodName(report.period))}</span>`
+            + `<div class="metrics">${SERIES.map((s) => `<span class="metric"><i style="background:${s.color}"></i><b>${number(totals[s.key] ?? 0)}</b>${s.label}</span>`).join('')}</div>`
+            + '<div class="plot"><svg role="img" aria-label="Views and visitors over time"></svg><div class="tooltip" hidden></div></div>';
+
+        const plot = app.querySelector('.plot');
+        const svg = plot.querySelector('svg');
+        const tooltip = plot.querySelector('.tooltip');
+        const width = Math.max(260, plot.clientWidth);
+        const height = 190;
+        const pad = { top: 10, right: 6, bottom: 24, left: 34 };
+        const plotWidth = width - pad.left - pad.right;
+        const plotHeight = height - pad.top - pad.bottom;
+        const floor = pad.top + plotHeight;
+        const max = scaleMax(Math.max(...slots.flatMap((slot) => SERIES.map((s) => slot[s.key] || 0))));
+        const x = (i) => pad.left + (slots.length > 1 ? (i / (slots.length - 1)) * plotWidth : plotWidth / 2);
+        const y = (value) => floor - (value / max) * plotHeight;
+        const points = (s) => slots.map((slot, i) => ({ x: x(i), y: y(slot[s.key] || 0) }));
+
+        let markup = '<defs>' + SERIES.map((s) => `<linearGradient id="fill-${s.key}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${s.fill[0]}"/><stop offset="0.7" stop-color="${s.fill[1]}"/><stop offset="1" stop-color="${s.fill[1]}" stop-opacity="0"/></linearGradient>`).join('') + '</defs>';
+        for (let i = 0; i <= 3; i++) {
+            const value = (max / 3) * i;
+            markup += `<line x1="${pad.left}" x2="${width - pad.right}" y1="${y(value)}" y2="${y(value)}" stroke="var(--grid)"/>`
+                + `<text x="${pad.left - 8}" y="${y(value) + 4}" text-anchor="end">${number(Math.round(value))}</text>`;
+        }
+        const labels = width < 420 ? 3 : 5;
+        const interval = Math.max(1, Math.floor(slots.length / labels));
+        for (let i = 0; i < slots.length; i += interval) {
+            const anchor = i === 0 ? 'start' : i + interval >= slots.length ? 'end' : 'middle';
+            const label = hourly ? utc(slots[i].timestamp, { hour: 'numeric', hour12: true }) : utc(slots[i].timestamp, { month: 'short', day: 'numeric' });
+            markup += `<text x="${x(i)}" y="${height - 4}" text-anchor="${anchor}">${html(label)}</text>`;
+        }
+        markup += `<line class="cursor" y1="${pad.top}" y2="${floor}" stroke="#94a3b8" stroke-dasharray="3 3" visibility="hidden"/>`;
+        for (const s of SERIES) {
+            const curve = smooth(points(s), floor);
+            markup += `<path d="M${x(0)},${floor}L${curve.slice(1)}L${x(slots.length - 1)},${floor}Z" fill="url(#fill-${s.key})"/>`
+                + `<path d="${curve}" fill="none" stroke="${s.color}" stroke-width="${s.width}" stroke-linecap="round" stroke-linejoin="round"/>`;
+        }
+        markup += '<g class="dots"></g>';
+        svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+        svg.setAttribute('height', height);
+        svg.innerHTML = markup;
+
+        const cursor = svg.querySelector('.cursor');
+        const dots = svg.querySelector('.dots');
+        // Like the dashboard: a hollow dot on the last point, or on the hovered one.
+        const mark = (i) => {
+            dots.innerHTML = SERIES.map((s) => `<circle cx="${x(i)}" cy="${y(slots[i][s.key] || 0)}" r="4.5" fill="var(--bg)" stroke="${s.color}" stroke-width="2.5"/>`).join('');
+        };
+        const rest = () => {
+            cursor.setAttribute('visibility', 'hidden');
+            tooltip.hidden = true;
+            slots.length > 3 ? mark(slots.length - 1) : dots.innerHTML = '';
+        };
+        rest();
+        svg.addEventListener('pointermove', (event) => {
+            const box = svg.getBoundingClientRect();
+            const position = ((event.clientX - box.left) / box.width) * width;
+            const i = Math.max(0, Math.min(slots.length - 1, Math.round(((position - pad.left) / plotWidth) * (slots.length - 1))));
+            cursor.setAttribute('x1', x(i));
+            cursor.setAttribute('x2', x(i));
+            cursor.setAttribute('visibility', 'visible');
+            mark(i);
+            tooltip.innerHTML = `<strong>${html(slots[i].date || '')}</strong>`
+                + SERIES.map((s) => `<div><i style="background:${s.color}"></i>${s.label}<b>${number(slots[i][s.key] || 0)}</b></div>`).join('');
+            tooltip.hidden = false;
+            const left = (x(i) / width) * box.width;
+            tooltip.style.left = `${left + 14 + tooltip.offsetWidth > box.width ? left - 14 - tooltip.offsetWidth : left + 14}px`;
+        });
+        svg.addEventListener('pointerleave', rest);
+    }
+
+    // The dashboard's curve: Bézier segments through every point, never below the axis.
+    function smooth(points, floor) {
+        let path = `M${points[0].x},${points[0].y}`;
+        for (let i = 0; i < points.length - 1; i++) {
+            const p0 = points[i === 0 ? 0 : i - 1];
+            const p1 = points[i];
+            const p2 = points[i + 1];
+            const p3 = points[i + 2] || p2;
+            const c1y = Math.min(p1.y + (p2.y - p0.y) / 6, floor);
+            const c2y = Math.min(p2.y - (p3.y - p1.y) / 6, floor);
+            path += `C${p1.x + (p2.x - p0.x) / 6},${c1y} ${p2.x - (p3.x - p1.x) / 6},${c2y} ${p2.x},${p2.y}`;
+        }
+        return path;
+    }
+
+    // The dashboard's Y axis: the highest value, rounded up.
+    function scaleMax(value) {
+        const max = Math.max(value, 8);
+        const step = max > 100 ? 50 : max > 50 ? 20 : max > 20 ? 10 : 4;
+        return Math.ceil(max / step) * step;
+    }
+
+    // Funnels
+
+    function renderFunnel(report) {
+        const preview = report.preview;
+        const steps = report.steps;
+        const kind = preview?.kind || 'funnel';
+        const caption = [preview ? `${preview.id ? 'Edited' : 'New'} ${kind}` : '', steps.length > 1 ? `${steps.length} steps` : '', periodName(report.period)].filter(Boolean).join(' · ');
+        let markup = `<span class="caption">${html(caption)}</span><h1>${html(preview?.name || report.funnel || 'Funnel')}</h1>`;
+
+        if (steps.length === 1) {
+            markup += `<div class="visits"><strong>${number(steps[0].visits)}</strong>visits reached ${html(stepName(steps[0].step).value)}</div>`;
+        } else {
+            const first = steps[0].visits;
+            const share = (visits) => (first > 0 ? (visits / first) * 100 : 0);
+            markup += '<div class="flow">' + steps.map((step, i) => {
+                const before = share(i === 0 ? step.visits : steps[i - 1].visits);
+                const name = stepName(step.step);
+                // Stripes show the visits lost since the previous step, as on the Funnels page.
+                return `<div class="stage"><div class="column"><span class="percent">${step.conversion_from_first.toFixed(1)}%</span>`
+                    + `<div class="slot"><div class="stack" style="height:${before}%"><div class="bar" style="height:${before > 0 ? (share(step.visits) / before) * 100 : 0}%"></div></div></div></div>`
+                    + `<div class="step"><span class="step-number">${i + 1}</span><span class="step-name"><strong title="${html(name.value)}">${html(name.value)}</strong><span>${name.type}</span></span></div>`
+                    + `<div class="visits"><strong>${number(step.visits)}</strong>visits</div></div>`;
+            }).join('') + '</div>';
+        }
+        if (preview) markup += '<footer></footer>';
+        app.innerHTML = markup;
+        if (preview) renderSave(report, app.querySelector('footer'));
+    }
+
+    function stepName(step) {
+        const [type, ...value] = step.split(' ');
+        return { type: type === 'Page' ? 'Page view' : 'Event', value: value.join(' ') };
+    }
+
+    // Saves the previewed funnel through the assistant's connection, so it only
+    // works when the user allowed the assistant to edit funnels.
+    function renderSave(report, footer) {
+        const preview = report.preview;
+        if (!host.serverTools) {
+            footer.remove();
+            return;
+        }
+        footer.innerHTML = `<button type="button">${preview.id ? 'Save changes' : `Save ${preview.kind}`}</button>`;
+        const button = footer.querySelector('button');
+        button.addEventListener('click', async () => {
+            button.disabled = true;
+            footer.querySelector('.note')?.remove();
+            const tool = preview.id ? 'update_funnel' : 'create_funnel';
+            const args = preview.id
+                ? { site_id: report.site_id, id: preview.id, name: preview.name, steps: preview.steps }
+                : { site_id: report.site_id, kind: preview.kind, name: preview.name, steps: preview.steps };
+            try {
+                const saved = await request('tools/call', { name: tool, arguments: args });
+                if (saved?.isError) throw new Error(saved.content?.[0]?.text || 'Nothing could be saved.');
+                const id = saved?.structuredContent?.saved?.id ?? JSON.parse(saved?.content?.[0]?.text || '{}').saved?.id ?? preview.id;
+                footer.innerHTML = '<span class="saved">Saved to your funnels</span>';
+                reportSize();
+                // Tells the assistant, so that it does not save it a second time.
+                request('ui/update-model-context', {
+                    content: [{ type: 'text', text: `The user clicked Save in the preview: the ${preview.kind} "${preview.name}" is saved in the dashboard (id ${id}). Do not call ${tool} for it again.` }],
+                }).catch(() => {});
+            } catch (error) {
+                button.disabled = false;
+                button.insertAdjacentHTML('beforebegin', `<p class="note error">${html(error.message)}</p>`);
+                reportSize();
+            }
+        });
+    }
+
+    function renderSavedFunnels(funnels) {
+        app.innerHTML = '<span class="caption">Saved funnels</span>'
+            + (funnels.length === 0
+                ? '<p class="note">None yet.</p>'
+                : `<ul>${funnels.map((funnel) => `<li><strong>${html(funnel.name)}</strong><span>${html(funnel.kind)}${funnel.steps.length > 1 ? ` · ${funnel.steps.length} steps` : ''}</span></li>`).join('')}</ul>`);
+    }
+
+    let lastWidth = 0;
+    new ResizeObserver(() => {
+        if (app.clientWidth !== lastWidth && result && data()?.timeseries) render();
+        lastWidth = app.clientWidth;
+    }).observe(app);
+})();
+</script>
+</body>
+</html>

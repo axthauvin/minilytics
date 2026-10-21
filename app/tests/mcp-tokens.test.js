@@ -263,12 +263,53 @@ test('MCP computes funnels from steps or saved funnels', { skip: !hasPhp }, asyn
 
   const saved = await callTool('get_funnel', { site_id: 'private_site', funnel: 'pricing to SIGNUP' });
   assert.deepEqual(summary(saved.data), expected);
+  assert.equal(saved.data.funnel, 'Pricing to signup');
 
   const listed = await callTool('get_funnel', { site_id: 'private_site' });
   assert.deepEqual(listed.data.saved_funnels, [{ id: 1, name: 'Pricing to signup', kind: 'funnel', steps: ['Page /pricing', 'Event Signup'] }]);
 
   assert.match((await callTool('get_funnel', { site_id: 'private_site', funnel: 'Nope' })).text, /No saved funnel/);
   assert.match((await callTool('get_funnel', { site_id: 'private_site', steps: [{ page: '/a', event: 'b' }] })).text, /either a page or an event/);
+});
+
+test('MCP Apps show charts for the time series and funnels', { skip: !hasPhp }, async () => {
+  const uri = 'ui://minilytics/charts.html';
+  const { body } = await mcp('tools/list', {});
+  const withChart = body.result.tools.filter((tool) => tool._meta?.ui?.resourceUri === uri).map((tool) => tool.name);
+  assert.deepEqual(withChart.sort(), ['get_funnel', 'get_timeseries', 'preview_funnel']);
+
+  const listed = await mcp('resources/list', {});
+  assert.deepEqual(listed.body.result.resources.map((resource) => [resource.uri, resource.mimeType]), [[uri, 'text/html;profile=mcp-app']]);
+  const read = await mcp('resources/read', { uri });
+  assert.equal(read.body.result.contents[0].mimeType, 'text/html;profile=mcp-app');
+  assert.match(read.body.result.contents[0].text, /ui\/initialize/);
+  for (const unknown of ['ui://minilytics/../../mcp.php', 'ui://minilytics/other.html', 'file:///etc/passwd']) {
+    assert.equal((await mcp('resources/read', { uri: unknown })).body.error.code, -32002, unknown);
+  }
+
+  // The chart reads structured data; tools without a chart only answer text.
+  const timeseries = await mcp('tools/call', { name: 'get_timeseries', arguments: { site_id: 'private_site' } });
+  assert.deepEqual(timeseries.body.result.structuredContent, JSON.parse(timeseries.body.result.content[0].text));
+  // Unique visitors of the period, not the sum of the days.
+  assert.deepEqual(timeseries.body.result.structuredContent.totals, { visitors: 1, pageviews: 3 });
+  const pages = await mcp('tools/call', { name: 'get_top_pages', arguments: { site_id: 'private_site' } });
+  assert.equal(pages.body.result.structuredContent, undefined);
+});
+
+test('MCP previews a funnel without saving it', { skip: !hasPhp }, async () => {
+  const preview = await callTool('preview_funnel', { site_id: 'private_site', name: 'Pricing then upload', steps: [{ page: '/pricing' }, { event: 'Upload Error' }] });
+  assert.deepEqual(preview.data.preview, { id: null, kind: 'funnel', name: 'Pricing then upload', steps: [{ page: '/pricing' }, { event: 'Upload Error' }] });
+  assert.deepEqual(preview.data.steps.map((step) => [step.step, step.visits]), [['Page /pricing', 2], ['Event Upload Error', 1]]);
+
+  const edit = await callTool('preview_funnel', { site_id: 'private_site', id: 1, steps: [{ page: '/pricing' }] });
+  assert.deepEqual(edit.data.preview, { id: 1, kind: 'funnel', name: 'Pricing to signup', steps: [{ page: '/pricing' }] });
+
+  assert.match((await callTool('preview_funnel', { site_id: 'private_site', name: 'pricing to signup', steps: [{ page: '/' }] })).text, /already named/);
+  assert.match((await callTool('preview_funnel', { site_id: 'private_site', kind: 'goal', name: 'Two', steps: [{ page: '/' }, { page: '/a' }] })).text, /exactly one step/);
+  assert.match((await callTool('preview_funnel', { site_id: 'private_site', id: 99, name: 'x' })).text, /No funnel/);
+
+  const listed = await callTool('get_funnel', { site_id: 'private_site' });
+  assert.ok(!listed.data.saved_funnels.some((funnel) => funnel.name === 'Pricing then upload'), 'A preview saves nothing.');
 });
 
 test('MCP filters visits by the events they triggered', { skip: !hasPhp }, async () => {
@@ -289,7 +330,7 @@ test('MCP reports invalid tool arguments to the model', { skip: !hasPhp }, async
 
 test('MCP answers protocol errors with JSON-RPC errors', { skip: !hasPhp }, async () => {
   assert.equal((await mcp('tools/call', { name: 'drop_tables' })).body.error.code, -32602);
-  assert.equal((await mcp('resources/list', {})).body.error.code, -32601);
+  assert.equal((await mcp('prompts/list', {})).body.error.code, -32601);
   const post = (body) => fetch(`${BASE}/mcp.php`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...bearer() }, body });
   assert.equal((await (await post('{not json')).json()).error.code, -32700);
   // Batches were removed from MCP in 2025-06-18.
