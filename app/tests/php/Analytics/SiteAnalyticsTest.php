@@ -81,6 +81,29 @@ final class SiteAnalyticsTest extends TestCase
         $this->assertSame('+1', $this->analytics('7d')->summary()['deltas']['visitors']);
     }
 
+    public function testTopEventsLeaveOutTheTrackersInternalSignals(): void
+    {
+        $this->record('s1', 'v1', '_ml_engaged', ['path' => '/'], 3600);
+        $this->record('s1', 'v1', 'signup', ['path' => '/'], 3500);
+        // "_" is a single-character wildcard in LIKE: "xml_export" must not pass for internal.
+        $this->record('s1', 'v1', 'xml_export', ['path' => '/'], 3400);
+
+        $events = $this->analytics('7d')->topEvents();
+
+        $this->assertEqualsCanonicalizing(['signup', 'xml_export'], array_column($events, 'name'));
+        $this->assertSame([50.0, 50.0], array_column($events, 'percentage'));
+    }
+
+    public function testInternalSignalsDoNotSaveAVisitFromBouncing(): void
+    {
+        $this->record('engaged', 'v1', 'pageview', ['path' => '/'], 3600);
+        $this->record('engaged', 'v1', '_ml_engaged', ['path' => '/'], 3590);
+        $this->record('exported', 'v2', 'pageview', ['path' => '/'], 1800);
+        $this->record('exported', 'v2', 'xml_export', ['path' => '/'], 1790);
+
+        $this->assertSame(50.0, $this->analytics('7d')->summary()['bounce_rate']);
+    }
+
     public function testTopPagesAreSortedByViews(): void
     {
         $this->record('s1', 'v1', 'pageview', ['path' => '/pricing', 'title' => 'Pricing'], 3600);

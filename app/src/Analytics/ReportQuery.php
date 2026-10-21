@@ -13,6 +13,12 @@ use Minilytics\Database\DatabaseConnection;
  */
 final class ReportQuery
 {
+    /**
+     * SQL condition keeping the actions sent by the tracker itself, such as
+     * _ml_engaged, out of the custom events. Not a LIKE: "_" is a wildcard there.
+     */
+    public const NOT_INTERNAL = "substr(json_extract(action, '$.name'), 1, 4) <> '_ml_'";
+
     private ?string $condition = null;
 
     /** @param array<string, string[]> $filters see AnalyticsFilters::fromRequest() */

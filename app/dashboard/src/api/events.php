@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Minilytics\Analytics\Period;
+use Minilytics\Analytics\ReportQuery;
 use Minilytics\Auth\Auth;
 use Minilytics\Database\Connections;
 use Minilytics\Sites\SiteRegistry;
@@ -36,7 +37,7 @@ try {
     // The Events Explorer is reserved for product/custom events. Pageviews
     // belong to the traffic overview and would otherwise flatten every other
     // series on this multi-event chart.
-    $eventOnlyClause = "json_extract(action, '$.name') NOT LIKE '_ml_%' AND json_extract(action, '$.name') <> 'pageview'";
+    $eventOnlyClause = ReportQuery::NOT_INTERNAL . " AND json_extract(action, '$.name') <> 'pageview'";
 
     // Build WHERE clauses
     $where = ["timestamp >= :start_date AND timestamp <= :end_date", $eventOnlyClause];
