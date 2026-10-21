@@ -160,7 +160,7 @@ final class SummaryReport
             visits AS (
                 SELECT session_id,
                        visit_number,
-                       SUM(CASE WHEN json_extract(action, '$.name') NOT LIKE '_ml_%' THEN 1 ELSE 0 END) AS action_count,
+                       SUM(CASE WHEN " . ReportQuery::NOT_INTERNAL . " THEN 1 ELSE 0 END) AS action_count,
                        strftime('%s', MAX(timestamp)) - strftime('%s', MIN(timestamp)) AS duration
                 FROM sessionized_events
                 GROUP BY session_id, visit_number

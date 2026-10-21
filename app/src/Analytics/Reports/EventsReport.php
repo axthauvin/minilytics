@@ -22,8 +22,8 @@ final class EventsReport
     public function __construct(private readonly ReportQuery $query) {}
 
     /**
-     * Custom events (everything but pageviews), with their share of the 100
-     * most frequent ones. `$search` keeps the events whose name contains it.
+     * Custom events (everything but pageviews and the tracker's internal
+     * signals), with their share of the 100 most frequent ones. `$search` keeps the events whose name contains it.
      */
     public function top(int $limit = 100, ?string $search = null): array
     {
@@ -35,6 +35,7 @@ final class EventsReport
             FROM user_activity
             WHERE timestamp >= :start_date AND timestamp <= :end_date
               AND json_extract(action, '$.name') != 'pageview'
+              AND " . ReportQuery::NOT_INTERNAL . "
               {$searchSql}
               {$this->query->condition()}
             GROUP BY event_name
