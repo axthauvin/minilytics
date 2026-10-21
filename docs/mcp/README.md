@@ -1,6 +1,6 @@
 # AI assistants (MCP)
 
-Ask an AI assistant such as Claude or ChatGPT about your traffic, for example "Where did last week's visitors come from?", and it answers from your own Minilytics data. Assistants sign in with your Minilytics account and can only read your statistics, never change anything.
+Ask an AI assistant such as Claude or ChatGPT about your traffic, for example "Where did last week's visitors come from?", and it answers from your own Minilytics data. Assistants sign in with your Minilytics account and only read your statistics, unless you let one create and edit your funnels, goals and journeys. They can never delete anything.
 
 ## Connect an assistant
 
@@ -57,15 +57,21 @@ Some versions of Antigravity do not finish signing in. Use an [access token](#ac
 
 Assistants read the same reports as the dashboard, such as visitors, pages, referrers, events, funnels, journeys, countries, devices and blocked bots, for any period. They can also read individual visits, as on the Sessions page: the pages viewed and events triggered, with the country and device. Visits stay anonymous: assistants never see an IP address, and a visitor's code changes every month.
 
+## Let an assistant edit funnels
+
+An assistant can also create funnels, goals and journeys, or rename them and change their steps, for example "Create a funnel from the pricing page to the signup event". It saves them in the dashboard, where they appear on the **Funnels** page for everyone in your workspace.
+
+Each connection only reads until you allow it. In **Settings → AI assistants → Authorized access**, turn on **Can edit funnels** next to the assistant or the access token. Until then, the assistant tells you that it needs this permission. Turn it off to make the connection read-only again. Even when it can edit, an assistant can never delete a funnel, goal or journey, or anything else.
+
 ## Manage access
 
-**Settings → AI assistants → Authorized access** lists the connected assistants and your access tokens, with when each was last used. Revoke one to cut its access right away.
+**Settings → AI assistants → Authorized access** lists the connected assistants and your access tokens, with when each was last used. Revoke one to cut its access right away, or turn off **Can edit funnels** to make it read-only again.
 
 After you update Minilytics, an assistant may still use the old list of reports. Refresh it without reconnecting. In Claude, open **Customize → Connectors**, choose Minilytics and click **Update**, then start a new conversation. With other assistants, restart them or reconnect the server.
 
 ## Access tokens
 
-Some assistants cannot sign in, for example agents running without a browser. Give them an access token instead. Create one in **Settings → AI assistants → Other tools**, under **Assistant can't sign in?**, and copy it right away, because it is shown only once. Like a sign-in, a token can only read your statistics, and you can revoke it at any time.
+Some assistants cannot sign in, for example agents running without a browser. Give them an access token instead. Create one in **Settings → AI assistants → Other tools**, under **Assistant can't sign in?**, and copy it right away, because it is shown only once. Like a sign-in, a token only reads your statistics until you let it [edit funnels](#let-an-assistant-edit-funnels), and you can revoke it at any time.
 
 Add the token to the assistant's MCP settings, as in this example.
 
