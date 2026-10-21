@@ -32,6 +32,19 @@ try {
         exit;
     }
 
+    if ($method === 'PATCH') {
+        $allowed = ($body['can_write'] ?? false) === true;
+        $found = isset($body['app'])
+            ? OAuthServer::allowWrite($userId, (string) $body['app'], $allowed)
+            : McpTokens::allowWrite($userId, (int) ($body['id'] ?? 0), $allowed);
+        if (!$found) {
+            http_response_code(404);
+            Auth::jsonError(isset($body['app']) ? 'Application not found.' : 'Token not found.');
+        }
+        echo json_encode(['success' => true]);
+        exit;
+    }
+
     if ($method === 'DELETE' && isset($body['app'])) {
         if (!OAuthServer::disconnect($userId, (string) $body['app'])) {
             http_response_code(404);

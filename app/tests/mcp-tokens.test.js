@@ -14,6 +14,7 @@ let workdir;
 let server;
 let token;
 let revokedToken;
+let writerToken;
 
 const phpEnv = () => ({ ...process.env, MINILYTICS_DATA_DIR: path.join(workdir, 'data') });
 
@@ -58,10 +59,12 @@ function prepareInstall() {
     $funnel->execute();
     $revoked = Minilytics\\Auth\\McpTokens::create(1, 'revoked');
     Minilytics\\Auth\\McpTokens::revoke(1, $revoked['id']);
-    echo json_encode([Minilytics\\Auth\\McpTokens::create(1, 'test')['token'], $revoked['token']]);
+    $writer = Minilytics\\Auth\\McpTokens::create(1, 'writer');
+    Minilytics\\Auth\\McpTokens::allowWrite(1, $writer['id'], true);
+    echo json_encode([Minilytics\\Auth\\McpTokens::create(1, 'test')['token'], $revoked['token'], $writer['token']]);
   `], { env: phpEnv() });
   assert.equal(setup.status, 0, setup.stdout.toString() + setup.stderr.toString());
-  [token, revokedToken] = JSON.parse(setup.stdout.toString().trim().split('\n').pop());
+  [token, revokedToken, writerToken] = JSON.parse(setup.stdout.toString().trim().split('\n').pop());
 }
 
 async function waitForServer() {
@@ -83,8 +86,8 @@ async function mcp(method, params, headers = bearer()) {
   });
   return { status: res.status, body: await res.json() };
 }
-async function callTool(name, args = {}) {
-  const { body } = await mcp('tools/call', { name, arguments: args });
+async function callTool(name, args = {}, headers = bearer()) {
+  const { body } = await mcp('tools/call', { name, arguments: args }, headers);
   const text = body.result.content[0].text;
   return { isError: body.result.isError === true, text, data: body.result.isError ? null : JSON.parse(text) };
 }
@@ -159,14 +162,17 @@ test('MCP initialize negotiates the protocol and notifications get 202', { skip:
   assert.equal(res.status, 202);
 });
 
-test('MCP lists read-only tools with their input schema', { skip: !hasPhp }, async () => {
+test('MCP lists its tools with their input schema, and none deletes anything', { skip: !hasPhp }, async () => {
   const { body } = await mcp('tools/list', {});
   const names = body.result.tools.map((tool) => tool.name);
-  for (const name of ['list_sites', 'get_overview', 'get_timeseries', 'get_top_pages', 'get_top_referrers', 'get_top_events', 'get_countries', 'get_environment', 'get_acquisition', 'get_event_details', 'get_funnel', 'get_sessions', 'get_journey', 'get_blocked_traffic']) {
+  const writers = ['create_funnel', 'update_funnel'];
+  for (const name of ['list_sites', 'get_overview', 'get_timeseries', 'get_top_pages', 'get_top_referrers', 'get_top_events', 'get_countries', 'get_environment', 'get_acquisition', 'get_event_details', 'get_funnel', 'get_sessions', 'get_journey', 'get_blocked_traffic', ...writers]) {
     assert.ok(names.includes(name), `missing ${name}`);
   }
   for (const tool of body.result.tools) {
-    assert.equal(tool.annotations.readOnlyHint, true);
+    assert.equal(tool.annotations.readOnlyHint, !writers.includes(tool.name), tool.name);
+    if (writers.includes(tool.name)) assert.equal(tool.annotations.destructiveHint, false, tool.name);
+    assert.doesNotMatch(tool.name, /delete|remove/);
     assert.equal(tool.inputSchema.type, 'object');
   }
 });
@@ -259,7 +265,7 @@ test('MCP computes funnels from steps or saved funnels', { skip: !hasPhp }, asyn
   assert.deepEqual(summary(saved.data), expected);
 
   const listed = await callTool('get_funnel', { site_id: 'private_site' });
-  assert.deepEqual(listed.data.saved_funnels, [{ name: 'Pricing to signup', kind: 'funnel', steps: ['Page /pricing', 'Event Signup'] }]);
+  assert.deepEqual(listed.data.saved_funnels, [{ id: 1, name: 'Pricing to signup', kind: 'funnel', steps: ['Page /pricing', 'Event Signup'] }]);
 
   assert.match((await callTool('get_funnel', { site_id: 'private_site', funnel: 'Nope' })).text, /No saved funnel/);
   assert.match((await callTool('get_funnel', { site_id: 'private_site', steps: [{ page: '/a', event: 'b' }] })).text, /either a page or an event/);
@@ -289,4 +295,63 @@ test('MCP answers protocol errors with JSON-RPC errors', { skip: !hasPhp }, asyn
   // Batches were removed from MCP in 2025-06-18.
   const batch = JSON.stringify([{ jsonrpc: '2.0', id: 1, method: 'ping' }]);
   assert.equal((await (await post(batch)).json()).error.code, -32600);
+});
+
+test('a read-only token cannot save funnels and is told how to get the permission', { skip: !hasPhp }, async () => {
+  for (const [name, args] of [['create_funnel', { site_id: 'private_site', name: 'Blog readers', steps: [{ page: '/blog/first-post' }] }], ['update_funnel', { site_id: 'private_site', id: 1, name: 'Renamed' }]]) {
+    const result = await callTool(name, args);
+    assert.equal(result.isError, true);
+    assert.match(result.text, /Settings → AI assistants/);
+    assert.match(result.text, /Can edit funnels/);
+  }
+  const listed = await callTool('get_funnel', { site_id: 'private_site' });
+  assert.deepEqual(listed.data.saved_funnels.map((funnel) => funnel.name), ['Pricing to signup']);
+});
+
+test('a token allowed to edit creates and edits funnels, goals and journeys', { skip: !hasPhp }, async () => {
+  const write = (name, args) => callTool(name, { site_id: 'private_site', ...args }, bearer(writerToken));
+
+  const funnel = await write('create_funnel', { name: 'Blog to upload', steps: [{ page: '/blog/first-post' }, { event: 'Upload Error' }] });
+  assert.deepEqual(funnel.data.saved, { id: 2, name: 'Blog to upload', kind: 'funnel', steps: ['Page /blog/first-post', 'Event Upload Error'] });
+  const goal = await write('create_funnel', { kind: 'goal', name: 'Signed up', steps: [{ event: 'Signup' }] });
+  assert.equal(goal.data.saved.kind, 'goal');
+  const journey = await write('create_funnel', { kind: 'journey', name: 'Pricing journey', steps: [{ page: '/pricing' }, { event: 'Signup' }] });
+  assert.equal(journey.data.saved.kind, 'journey');
+
+  // Saved funnels read back like the ones made in the dashboard.
+  const saved = await callTool('get_funnel', { site_id: 'private_site', funnel: 'Blog to upload' });
+  assert.deepEqual(saved.data.steps.map((step) => step.visits), [1, 1]);
+  const journeys = await callTool('get_journey', { site_id: 'private_site' });
+  assert.deepEqual(journeys.data.saved_journeys, [{ id: journey.data.saved.id, name: 'Pricing journey', entry: 'Page /pricing', exit: 'Event Signup' }]);
+  const dashboard = spawnSync('php', ['-r', `
+    require '${workdir.replace(/\\/g, '/')}/vendor/autoload.php';
+    $rows = Minilytics\\Database\\Connections::forSite('private_site')->query('SELECT name, kind, steps FROM funnels ORDER BY id');
+    $out = []; while ($row = $rows->fetchArray(SQLITE3_ASSOC)) { $out[] = $row; } echo json_encode($out);
+  `], { env: phpEnv() });
+  const rows = JSON.parse(dashboard.stdout.toString());
+  assert.deepEqual(JSON.parse(rows[1].steps), [{ type: 'pageview', value: '/blog/first-post', label: '/blog/first-post' }, { type: 'event', value: 'Upload Error', label: 'Upload Error' }]);
+
+  const renamed = await write('update_funnel', { id: 2, name: 'Blog to errors' });
+  assert.deepEqual(renamed.data.saved.steps, ['Page /blog/first-post', 'Event Upload Error']);
+  const restepped = await write('update_funnel', { id: 2, steps: [{ page: '/pricing' }, { page: '/blog/first-post' }, { event: 'Upload Error' }] });
+  assert.equal(restepped.data.saved.name, 'Blog to errors');
+  assert.equal(restepped.data.saved.steps.length, 3);
+  assert.equal(restepped.data.saved.kind, 'funnel');
+
+  const fails = async (name, args, pattern) => {
+    const result = await write(name, args);
+    assert.equal(result.isError, true, `${name} ${JSON.stringify(args)}`);
+    assert.match(result.text, pattern);
+  };
+  await fails('create_funnel', { name: 'pricing TO signup', steps: [{ page: '/' }] }, /already named "Pricing to signup" \(id 1\)/);
+  await fails('create_funnel', { kind: 'goal', name: 'Two goals', steps: [{ page: '/' }, { page: '/pricing' }] }, /exactly one step/);
+  await fails('create_funnel', { kind: 'journey', name: 'No exit', steps: [{ page: '/' }] }, /exactly two steps/);
+  await fails('create_funnel', { name: ' ', steps: [{ page: '/' }] }, /name must not be empty/);
+  await fails('create_funnel', { name: 'Bad step', steps: [{ page: '/', event: 'x' }] }, /either a page or an event/);
+  await fails('update_funnel', { id: 99, name: 'Ghost' }, /No funnel, goal or journey has the id 99/);
+  await fails('update_funnel', { id: 2 }, /new name, new steps, or both/);
+  await fails('update_funnel', { id: 2, name: 'Signed up' }, /already named/);
+  await fails('update_funnel', { id: goal.data.saved.id, steps: [{ page: '/' }, { page: '/pricing' }] }, /exactly one step/);
+  // Renaming to its own name, in another case, is allowed.
+  assert.equal((await write('update_funnel', { id: 2, name: 'BLOG TO ERRORS' })).data.saved.name, 'BLOG TO ERRORS');
 });

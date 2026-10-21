@@ -108,7 +108,7 @@ fwrite(STDOUT, "Added {$visits} visits and {$createdFunnels} funnels to '{$siteI
 
 function ensureFunnelsTable(DatabaseConnection $db): void
 {
-    // Mirrors setupFunnels() in dashboard/src/api/funnels.php.
+    // Mirrors SavedFunnels::ensureTable().
     if ($db->isMysql()) {
         $db->exec("CREATE TABLE IF NOT EXISTS funnels (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, name VARCHAR(80) NOT NULL, kind VARCHAR(20) NOT NULL DEFAULT 'funnel', steps JSON NOT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
         return;

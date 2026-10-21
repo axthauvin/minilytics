@@ -3,10 +3,10 @@
 declare(strict_types=1);
 
 use Minilytics\Analytics\Period;
+use Minilytics\Analytics\SavedFunnels;
 use Minilytics\Analytics\SiteAnalytics;
 use Minilytics\Auth\Auth;
 use Minilytics\Database\Connections;
-use Minilytics\Database\DatabaseConnection;
 use Minilytics\Sites\SiteRegistry;
 
 header('Content-Type: application/json; charset=utf-8');
@@ -18,74 +18,15 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET') {
     Auth::requireLogin();
 }
 
-function setupFunnels(DatabaseConnection $db): void
-{
-    if ($db->isMysql()) {
-        $db->exec("CREATE TABLE IF NOT EXISTS funnels (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, name VARCHAR(80) NOT NULL, kind VARCHAR(20) NOT NULL DEFAULT 'funnel', steps JSON NOT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-        return;
-    }
-    $db->exec("CREATE TABLE IF NOT EXISTS funnels (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, kind TEXT NOT NULL DEFAULT 'funnel', steps TEXT NOT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)");
-    $columns = $db->query('PRAGMA table_info(funnels)');
-    $hasKind = false;
-    while ($column = $columns->fetchArray(SQLITE3_ASSOC)) {
-        if ($column['name'] === 'kind') {
-            $hasKind = true;
-        }
-    }
-    if (!$hasKind) {
-        $db->exec("ALTER TABLE funnels ADD COLUMN kind TEXT NOT NULL DEFAULT 'funnel'");
-    }
-}
-function cleanSteps(mixed $steps): array
-{
-    if (!is_array($steps) || count($steps) < 1 || count($steps) > 12) {
-        throw new InvalidArgumentException('Add between 1 and 12 steps.');
-    }
-    $out = [];
-    foreach ($steps as $step) {
-        $type = ($step['type'] ?? '') === 'pageview' ? 'pageview' : 'event';
-        $value = trim((string) ($step['value'] ?? ''));
-        $label = trim((string) ($step['label'] ?? ''));
-        if ($value === '') {
-            throw new InvalidArgumentException('Every step needs an event or page.');
-        }
-        $out[] = ['type' => $type, 'value' => mb_substr($value, 0, 180), 'label' => mb_substr($label ?: $value, 0, 80)];
-    }
-    return $out;
-}
 try {
     $payload = json_decode(file_get_contents('php://input'), true) ?: [];
     $siteId = $_GET['site_id'] ?? $payload['site_id'] ?? null;
     $site = SiteRegistry::requireId($siteId);
     $db = Connections::forSite($site);
-    setupFunnels($db);
+    SavedFunnels::ensureTable($db);
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-        $name = trim((string) ($payload['name'] ?? ''));
-        if ($name === '') {
-            throw new InvalidArgumentException('Give this funnel a name.');
-        }
-        $steps = cleanSteps($payload['steps'] ?? []);
-        $kind = in_array($payload['kind'] ?? 'funnel', ['funnel', 'goal', 'journey'], true) ? $payload['kind'] : 'funnel';
-        if ($kind === 'goal') {
-            $steps = [reset($steps)];
-        }
-        if ($kind === 'journey') {
-            if (count($steps) < 2) {
-                throw new InvalidArgumentException('A journey needs an entry and an exit.');
-            } $steps = [$steps[0], $steps[1]];
-        }
-        $id = (int) ($payload['id'] ?? 0);
-        if ($id) {
-            $st = $db->prepare('UPDATE funnels SET name=:name, kind=:kind, steps=:steps WHERE id=:id');
-            $st->bindValue(':id', $id, SQLITE3_INTEGER);
-        } else {
-            $st = $db->prepare('INSERT INTO funnels (name, kind, steps) VALUES (:name, :kind, :steps)');
-        }
-        $st->bindValue(':name', mb_substr($name, 0, 80), SQLITE3_TEXT);
-        $st->bindValue(':kind', $kind, SQLITE3_TEXT);
-        $st->bindValue(':steps', json_encode($steps), SQLITE3_TEXT);
-        $st->execute();
-        echo json_encode(['success' => true, 'id' => $id ?: $db->lastInsertRowID()]);
+        $id = SavedFunnels::save($db, (int) ($payload['id'] ?? 0), (string) ($payload['name'] ?? ''), (string) ($payload['kind'] ?? 'funnel'), $payload['steps'] ?? []);
+        echo json_encode(['success' => true, 'id' => $id]);
         exit;
     }
     if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {

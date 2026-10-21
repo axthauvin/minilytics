@@ -10,7 +10,8 @@ use Minilytics\Mcp\McpServer;
 use Minilytics\OAuth\OAuthServer;
 
 /**
- * MCP endpoint giving AI assistants read-only access to the analytics.
+ * MCP endpoint giving AI assistants access to the analytics. They only read,
+ * unless the user allowed the connection to edit funnels, goals and journeys.
  *
  * Streamable HTTP transport, answering every request with a single JSON
  * response (no SSE stream). Requests carry `Authorization: Bearer <token>`:
@@ -40,7 +41,7 @@ if ($user === null) {
 
 $message = json_decode((string) file_get_contents('php://input'), true);
 $response = json_last_error() === JSON_ERROR_NONE
-    ? (new McpServer(AnalyticsTools::all()))->handle($message)
+    ? (new McpServer(AnalyticsTools::all(), $user['can_write']))->handle($message)
     : McpServer::error(null, -32700, 'Parse error.');
 
 if ($response === null) {

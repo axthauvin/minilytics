@@ -55,6 +55,7 @@ const SettingsPage = {
     if (saveDatabase) saveDatabase.addEventListener('click', () => this.saveDatabase());
     document.querySelectorAll('#databaseSettingsForm input').forEach((input) => input.addEventListener('input', () => this.invalidateDatabaseTest()));
     document.getElementById('settingsAssistantsPanel')?.addEventListener('click', (event) => this.handleAssistantsClick(event));
+    document.getElementById('settingsAssistantsPanel')?.addEventListener('change', (event) => { if (event.target.matches('[data-allow-write]')) this.allowWrite(event.target); });
     document.getElementById('updateCheckNow')?.addEventListener('click', () => this.loadVersion(true));
     document.getElementById('updateInstall')?.addEventListener('click', () => this.installUpdate());
     document.getElementById('updateRollback')?.addEventListener('click', () => this.rollbackUpdate());
@@ -605,16 +606,20 @@ const SettingsPage = {
       }
       const date = (value) => new Date(value.replace(' ', 'T') + 'Z').toLocaleDateString();
       const used = (value) => (value ? `last used ${date(value)}` : 'never used');
-      const row = (icon, title, meta, action) => `
+      const row = (icon, title, meta, access, action) => `
         <div class="mcp-access-row">
           <span class="mcp-access-icon">${this.mcpIcon(icon, 18)}</span>
           <div class="mcp-access-text"><div class="mcp-access-title">${title}</div><span>${meta}</span></div>
+          <label class="mcp-access-write" title="Let it create and edit funnels, goals and journeys. It can never delete anything."><input type="checkbox" ${access}> Can edit funnels</label>
           ${action}
         </div>`;
+      const access = (key, value, canWrite) => `data-allow-write="${key}" data-key="${value}"${canWrite ? ' checked' : ''}`;
       const rows = [
         ...data.apps.map((app) => row(this.assistantIcon(app.name), this.escapeHtml(app.name), `Connected ${date(app.connected_at)} · ${used(app.last_used_at)}`,
+          access('app', this.escapeHtml(app.client_id), app.can_write),
           `<button type="button" class="btn-outline btn-sm" data-revoke-app="${this.escapeHtml(app.client_id)}">Disconnect</button>`)),
         ...data.tokens.map((token) => row({ lucide: 'key-round' }, `${this.escapeHtml(token.name)} <code>${this.escapeHtml(token.hint)}</code>`, `Access token · created ${date(token.created_at)} · ${used(token.last_used_at)}`,
+          access('id', Number(token.id), token.can_write),
           `<button type="button" class="btn-outline btn-sm" data-revoke-token="${Number(token.id)}">Revoke</button>`)),
       ];
       list.innerHTML = rows.length ? rows.join('') : '<p class="mcp-empty">No assistant has access yet. Connect one above.</p>';
@@ -639,6 +644,17 @@ const SettingsPage = {
       await this.loadApi();
     } catch (error) { result.innerHTML = `<p class="settings-error">${this.escapeHtml(error.message)}</p>`; }
     button.disabled = false;
+  },
+
+  /** Lets a connected assistant or a token edit funnels, goals and journeys, or takes it back. */
+  async allowWrite(input) {
+    const { allowWrite: key, key: value } = input.dataset;
+    input.disabled = true;
+    try {
+      await Api.accessTokens('PATCH', { [key]: key === 'id' ? Number(value) : value, can_write: input.checked });
+      this.setApiFeedback(input.checked ? 'This connection can now create and edit funnels, goals and journeys.' : 'This connection can only read your analytics again.', 'success');
+    } catch (error) { input.checked = !input.checked; this.setApiFeedback(error.message, 'error'); }
+    input.disabled = false;
   },
 
   async revokeAccess(body) {

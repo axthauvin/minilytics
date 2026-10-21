@@ -8,7 +8,10 @@ use Closure;
 use InvalidArgumentException;
 use Minilytics\Analytics\AnalyticsFilters;
 use Minilytics\Analytics\Period;
+use Minilytics\Analytics\SavedFunnels;
 use Minilytics\Analytics\SiteAnalytics;
+use Minilytics\Database\Connections;
+use Minilytics\Database\DatabaseConnection;
 use Minilytics\Sites\SiteRegistry;
 
 /**
@@ -16,7 +19,8 @@ use Minilytics\Sites\SiteRegistry;
  *
  * Every report tool shares the same `site_id`, period and filter arguments and
  * reads its numbers from SiteAnalytics: exposing a new report is one more
- * entry in all().
+ * entry in all(). create_funnel and update_funnel are the only tools that
+ * write; McpServer runs them for connections allowed to edit.
  */
 final class AnalyticsTools
 {
@@ -27,6 +31,7 @@ final class AnalyticsTools
     public static function all(): array
     {
         $limit = ['limit' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 100, 'default' => 10, 'description' => 'Maximum number of rows to return.']];
+        $step = ['type' => 'object', 'properties' => ['page' => ['type' => 'string'], 'event' => ['type' => 'string']], 'additionalProperties' => false];
 
         return [
             new Tool(
@@ -94,7 +99,7 @@ final class AnalyticsTools
             self::report(
                 'get_funnel',
                 'Funnel conversion',
-                'How many visits go through ordered steps (pages or custom events), and the conversion between them. Pass steps for any funnel, or the name of a funnel saved in the dashboard. Without either, lists the saved funnels.',
+                'How many visits go through ordered steps (pages or custom events), and the conversion between them. Pass steps for any funnel, or the name of a funnel saved in the dashboard. Without either, lists the saved funnels, goals and journeys with their id.',
                 static fn(SiteAnalytics $analytics, array $args): array => self::funnel($analytics, $args),
                 [
                     'steps' => [
@@ -102,7 +107,7 @@ final class AnalyticsTools
                         'minItems' => 1,
                         'maxItems' => 12,
                         'description' => 'Steps in order, each a page path or an exact event name, e.g. [{"page": "/pricing"}, {"event": "Signup"}].',
-                        'items' => ['type' => 'object', 'properties' => ['page' => ['type' => 'string'], 'event' => ['type' => 'string']], 'additionalProperties' => false],
+                        'items' => $step,
                     ],
                     'funnel' => ['type' => 'string', 'description' => 'Name of a funnel saved in the dashboard.'],
                 ],
@@ -155,11 +160,11 @@ final class AnalyticsTools
             self::report(
                 'get_journey',
                 'Journey between two steps',
-                'The paths visits took from an entry step to an exit step (each a page or a custom event): how many visits went through the entry, how many then reached the exit, and the most common paths from the entry to the exit (the 3 most common next steps at each point, up to 12 steps). Pass entry and exit, or the name of a journey saved in the dashboard. Without either, lists the saved journeys.',
+                'The paths visits took from an entry step to an exit step (each a page or a custom event): how many visits went through the entry, how many then reached the exit, and the most common paths from the entry to the exit (the 3 most common next steps at each point, up to 12 steps). Pass entry and exit, or the name of a journey saved in the dashboard. Without either, lists the saved journeys with their id.',
                 static fn(SiteAnalytics $analytics, array $args): array => self::journey($analytics, $args),
                 [
-                    'entry' => ['type' => 'object', 'description' => 'A page path or an exact event name, e.g. {"page": "/"}.', 'properties' => ['page' => ['type' => 'string'], 'event' => ['type' => 'string']], 'additionalProperties' => false],
-                    'exit' => ['type' => 'object', 'description' => 'A page path or an exact event name, e.g. {"event": "Signup"}.', 'properties' => ['page' => ['type' => 'string'], 'event' => ['type' => 'string']], 'additionalProperties' => false],
+                    'entry' => ['description' => 'A page path or an exact event name, e.g. {"page": "/"}.'] + $step,
+                    'exit' => ['description' => 'A page path or an exact event name, e.g. {"event": "Signup"}.'] + $step,
                     'journey' => ['type' => 'string', 'description' => 'Name of a journey saved in the dashboard.'],
                 ],
             ),
@@ -170,7 +175,70 @@ final class AnalyticsTools
                 static fn(SiteAnalytics $analytics, array $args): array => self::blockedTraffic($analytics->botActivity(), self::limit($args)),
                 $limit,
             ),
+            self::write(
+                'create_funnel',
+                'Create a funnel, goal or journey',
+                'Saves a new funnel, goal or journey in the dashboard, where it then appears on the Funnels page for everyone in this workspace. A funnel has 1 to 12 steps in order, a goal exactly one (the action that marks success, such as a signup), a journey exactly two (its entry, then its exit). Each step is a page path or an exact event name: check them with get_top_pages and get_top_events first. Names are unique on a website. Only works when the user allowed this connection to edit.',
+                [
+                    'kind' => ['type' => 'string', 'enum' => SavedFunnels::KINDS, 'default' => 'funnel'],
+                    'name' => ['type' => 'string', 'maxLength' => 80, 'description' => 'Name shown in the dashboard, e.g. "Pricing to signup".'],
+                    'steps' => ['type' => 'array', 'minItems' => 1, 'maxItems' => SavedFunnels::MAX_STEPS, 'items' => $step, 'description' => 'Steps in order, e.g. [{"page": "/pricing"}, {"event": "Signup"}]. One step for a goal, the entry then the exit for a journey.'],
+                ],
+                ['name', 'steps'],
+                static function (DatabaseConnection $db, array $saved, array $args): array {
+                    $kind = isset($args['kind']) ? self::choice($args, 'kind', SavedFunnels::KINDS) : 'funnel';
+                    $name = self::funnelName($args, $saved);
+                    $steps = self::kindSteps($kind, $args['steps'] ?? null);
+                    return ['id' => SavedFunnels::save($db, null, $name, $kind, $steps), 'name' => $name, 'kind' => $kind, 'steps' => $steps];
+                },
+            ),
+            self::write(
+                'update_funnel',
+                'Edit a funnel, goal or journey',
+                'Renames a saved funnel, goal or journey, or replaces its steps (all of them, in order). Its kind stays the same. Get its id from get_funnel or get_journey called without steps, or from create_funnel. Only works when the user allowed this connection to edit. Nothing can be deleted.',
+                [
+                    'id' => ['type' => 'integer', 'description' => 'ID of the saved funnel, goal or journey.'],
+                    'name' => ['type' => 'string', 'maxLength' => 80, 'description' => 'New name.'],
+                    'steps' => ['type' => 'array', 'minItems' => 1, 'maxItems' => SavedFunnels::MAX_STEPS, 'items' => $step, 'description' => 'New steps in order, e.g. [{"page": "/pricing"}, {"event": "Signup"}]. One step for a goal, the entry then the exit for a journey.'],
+                ],
+                ['id'],
+                static function (DatabaseConnection $db, array $saved, array $args): array {
+                    $id = is_numeric($args['id'] ?? null) ? (int) $args['id'] : 0;
+                    $current = array_values(array_filter($saved, static fn(array $funnel): bool => $funnel['id'] === $id))[0]
+                        ?? throw new InvalidArgumentException('No funnel, goal or journey has the id ' . $id . ': use an id from get_funnel.');
+                    if (!isset($args['name']) && !isset($args['steps'])) {
+                        throw new InvalidArgumentException('Pass a new name, new steps, or both.');
+                    }
+                    $others = array_filter($saved, static fn(array $funnel): bool => $funnel['id'] !== $id);
+                    $name = isset($args['name']) ? self::funnelName($args, $others) : $current['name'];
+                    $steps = isset($args['steps']) ? self::kindSteps($current['kind'], $args['steps']) : $current['steps'];
+                    SavedFunnels::save($db, $id, $name, $current['kind'], $steps);
+                    return ['id' => $id, 'name' => $name, 'kind' => $current['kind'], 'steps' => $steps];
+                },
+            ),
         ];
+    }
+
+    /**
+     * A tool saving a funnel, goal or journey of one website. The handler gets
+     * the website's database, its saved funnels, and returns the saved one.
+     *
+     * @param Closure(DatabaseConnection, list<array{id: int, name: string, kind: string, steps: list<array<string, string>>}>, array<string, mixed>): array{id: int, name: string, kind: string, steps: list<array<string, string>>} $save
+     * @param array<string, array<string, mixed>> $properties arguments added to site_id
+     * @param list<string> $required
+     */
+    private static function write(string $name, string $title, string $description, array $properties, array $required, Closure $save): Tool
+    {
+        $siteProperty = ['site_id' => self::sharedProperties()['site_id']];
+        return new Tool($name, $title, $description, $siteProperty + $properties, $required, static function (array $args) use ($save): array {
+            $siteId = SiteRegistry::requireId(self::siteId($args));
+            $db = Connections::forSite($siteId);
+            $funnel = $save($db, (new SiteAnalytics($db, $siteId, Period::from('7d')))->savedFunnels(), $args);
+            return [
+                'site_id' => $siteId,
+                'saved' => ['id' => $funnel['id'], 'name' => $funnel['name'], 'kind' => $funnel['kind'], 'steps' => array_map(static fn(array $step): string => self::describeStep($step), $funnel['steps'])],
+            ];
+        }, true);
     }
 
     /**
@@ -307,6 +375,7 @@ final class AnalyticsTools
             $steps = self::funnelSteps($args['steps']);
         } else {
             return ['saved_funnels' => array_map(static fn(array $funnel): array => [
+                'id' => $funnel['id'],
                 'name' => $funnel['name'],
                 'kind' => $funnel['kind'],
                 'steps' => array_map(static fn(array $step): string => self::describeStep($step), $funnel['steps']),
@@ -343,6 +412,7 @@ final class AnalyticsTools
             $steps = self::funnelSteps([$args['entry'] ?? null, $args['exit'] ?? null]);
         } else {
             return ['saved_journeys' => array_map(static fn(array $journey): array => [
+                'id' => $journey['id'],
                 'name' => $journey['name'],
                 'entry' => self::describeStep($journey['steps'][0] ?? []),
                 'exit' => self::describeStep($journey['steps'][1] ?? []),
@@ -412,6 +482,42 @@ final class AnalyticsTools
             }
             return $page !== null ? ['type' => 'pageview', 'value' => $page] : ['type' => 'event', 'value' => (string) $event];
         }, array_values($steps));
+    }
+
+    /**
+     * Steps for a funnel of this kind: a goal has exactly one, a journey two.
+     *
+     * @return list<array{type: string, value: string}>
+     */
+    private static function kindSteps(string $kind, mixed $steps): array
+    {
+        $steps = self::funnelSteps($steps);
+        if ($kind === 'goal' && count($steps) !== 1) {
+            throw new InvalidArgumentException('A goal has exactly one step: the page or event that marks success.');
+        }
+        if ($kind === 'journey' && count($steps) !== 2) {
+            throw new InvalidArgumentException('A journey has exactly two steps: its entry, then its exit.');
+        }
+        return $steps;
+    }
+
+    /**
+     * A new name, unused by the other saved funnels: the read tools find funnels by name.
+     *
+     * @param array<array{id: int, name: string}> $others
+     */
+    private static function funnelName(array $args, array $others): string
+    {
+        $name = self::text($args, 'name') ?? throw new InvalidArgumentException('name must not be empty.');
+        if (mb_strlen($name) > 80) {
+            throw new InvalidArgumentException('name is limited to 80 characters.');
+        }
+        foreach ($others as $funnel) {
+            if (strcasecmp($funnel['name'], $name) === 0) {
+                throw new InvalidArgumentException('A funnel, goal or journey is already named "' . $funnel['name'] . '" (id ' . $funnel['id'] . '): choose another name, or edit it with update_funnel.');
+            }
+        }
+        return $name;
     }
 
     private static function describeStep(array $step): string

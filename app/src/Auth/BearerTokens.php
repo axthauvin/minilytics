@@ -23,12 +23,13 @@ final class BearerTokens
     }
 
     /**
-     * Returns the active account owning a token stored in `$table`, and records
+     * Returns the active account owning a token stored in `$table`, with whether
+     * the token may edit funnels, goals and journeys, and records
      * the token's use at most once a minute, so read-heavy clients do not write
      * on every request.
      *
      * @param string $condition extra SQL on the token row `t`, such as an expiry check
-     * @return array{id: int, email: string}|null
+     * @return array{id: int, email: string, can_write: bool}|null
      */
     public static function owner(string $table, string $hashColumn, string $token, string $condition = ''): ?array
     {
@@ -36,7 +37,7 @@ final class BearerTokens
             return null;
         }
         $db = AuthDatabase::connection();
-        $stmt = $db->prepare("SELECT t.id, t.last_used_at, u.id AS user_id, u.email FROM {$table} t JOIN users u ON u.id = t.user_id WHERE t.{$hashColumn} = :hash AND u.status = " . Status::NORMAL . $condition);
+        $stmt = $db->prepare("SELECT t.id, t.last_used_at, t.can_write, u.id AS user_id, u.email FROM {$table} t JOIN users u ON u.id = t.user_id WHERE t.{$hashColumn} = :hash AND u.status = " . Status::NORMAL . $condition);
         $stmt->bindValue(':hash', hash('sha256', $token), SQLITE3_TEXT);
         $row = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
         if (!$row) {
@@ -46,7 +47,7 @@ final class BearerTokens
         if ($row['last_used_at'] === null || (int) $row['last_used_at'] < $now - 60) {
             $db->exec("UPDATE {$table} SET last_used_at = {$now} WHERE id = " . (int) $row['id']);
         }
-        return ['id' => (int) $row['user_id'], 'email' => (string) $row['email']];
+        return ['id' => (int) $row['user_id'], 'email' => (string) $row['email'], 'can_write' => (bool) $row['can_write']];
     }
 
     /** Formats a stored Unix timestamp for the dashboard (UTC, like every other date it receives). */

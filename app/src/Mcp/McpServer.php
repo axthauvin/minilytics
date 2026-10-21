@@ -24,8 +24,11 @@ final class McpServer
     /** @var array<string, Tool> */
     private array $tools = [];
 
-    /** @param list<Tool> $tools */
-    public function __construct(array $tools)
+    /**
+     * @param list<Tool> $tools
+     * @param bool $canWrite whether the connection may run the tools that save funnels
+     */
+    public function __construct(array $tools, private readonly bool $canWrite = false)
     {
         foreach ($tools as $tool) {
             $this->tools[$tool->name] = $tool;
@@ -76,7 +79,7 @@ final class McpServer
             'protocolVersion' => in_array($requested, self::PROTOCOL_VERSIONS, true) ? $requested : self::PROTOCOL_VERSIONS[0],
             'capabilities' => ['tools' => ['listChanged' => false]],
             'serverInfo' => ['name' => 'minilytics', 'title' => 'Minilytics', 'version' => self::VERSION],
-            'instructions' => 'Read-only access to the web analytics of this Minilytics instance. Call list_sites first, then pass a site_id to the other tools. Periods default to the last 7 days; dates are in UTC.',
+            'instructions' => 'Access to the web analytics of this Minilytics instance. Call list_sites first, then pass a site_id to the other tools. Periods default to the last 7 days; dates are in UTC. Every tool reads, except create_funnel and update_funnel, which save funnels, goals and journeys in the dashboard when the user allowed this connection to edit. Nothing can be deleted.',
         ];
     }
 
@@ -85,6 +88,9 @@ final class McpServer
         $tool = $this->tools[$params['name'] ?? ''] ?? null;
         if ($tool === null) {
             return self::error($id, -32602, 'Unknown tool: ' . (is_string($params['name'] ?? null) ? $params['name'] : ''));
+        }
+        if ($tool->writes && !$this->canWrite) {
+            return $this->result($id, ['content' => [['type' => 'text', 'text' => 'This connection can only read the analytics: nothing was saved. Ask the user to allow it to edit funnels, goals and journeys: in Minilytics, open Settings → AI assistants, find this assistant under Authorized access, turn on "Can edit funnels", then try again.']], 'isError' => true]);
         }
         $arguments = is_array($params['arguments'] ?? null) ? $params['arguments'] : [];
         try {
@@ -95,7 +101,8 @@ final class McpServer
         } catch (Throwable $e) {
             // Database errors can mention SQL or file paths: keep them in the server log, not in the conversation.
             error_log('Minilytics MCP tool ' . $tool->name . ' failed: ' . $e->getMessage());
-            return $this->result($id, ['content' => [['type' => 'text', 'text' => 'The analytics could not be read because of a server error. Try again later.']], 'isError' => true]);
+            $failure = $tool->writes ? 'Nothing could be saved because of a server error.' : 'The analytics could not be read because of a server error.';
+            return $this->result($id, ['content' => [['type' => 'text', 'text' => $failure . ' Try again later.']], 'isError' => true]);
         }
         return $this->result($id, ['content' => [['type' => 'text', 'text' => json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)]]]);
     }
