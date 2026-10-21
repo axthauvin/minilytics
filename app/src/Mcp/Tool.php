@@ -9,7 +9,9 @@ use Closure;
 /**
  * Defines a MCP tool. Tools read the analytics, except the few that save
  * funnels, goals and journeys ($writes): those only run for a connection the
- * user allowed to edit, and no tool ever deletes anything.
+ * user allowed to edit, and no tool ever deletes anything. A tool with a $view
+ * names the `ui://` page that assistants supporting MCP Apps display with its
+ * result, such as a chart.
  */
 final class Tool
 {
@@ -26,6 +28,7 @@ final class Tool
         private readonly array $required,
         private readonly Closure $handler,
         public readonly bool $writes = false,
+        public readonly ?string $view = null,
     ) {}
 
     /** The tool as listed by `tools/list`. */
@@ -35,7 +38,7 @@ final class Tool
         if ($this->required) {
             $schema['required'] = $this->required;
         }
-        return [
+        $definition = [
             'name' => $this->name,
             'title' => $this->title,
             'description' => $this->description,
@@ -44,6 +47,10 @@ final class Tool
                 ? ['readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => false, 'openWorldHint' => false]
                 : ['readOnlyHint' => true, 'openWorldHint' => false],
         ];
+        if ($this->view !== null) {
+            $definition['_meta'] = ['ui' => ['resourceUri' => $this->view]];
+        }
+        return $definition;
     }
 
     /** @param array<string, mixed> $arguments */

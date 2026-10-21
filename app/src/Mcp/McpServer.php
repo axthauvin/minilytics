@@ -10,7 +10,9 @@ use Throwable;
 
 /**
  * Minimal Model Context Protocol server: JSON-RPC 2.0 with the `tools`
- * capability only. The HTTP transport lives in mcp.php.
+ * capability, and the `resources` capability for the pages of the MCP Apps
+ * extension: assistants that support it display a tool's result in its page
+ * (a chart) instead of the raw JSON. The HTTP transport lives in mcp.php.
  */
 final class McpServer
 {
@@ -20,6 +22,10 @@ final class McpServer
      */
     public const PROTOCOL_VERSIONS = ['2025-11-25', '2025-06-18'];
     private const VERSION = '1.0.0';
+    private const VIEW_MIME_TYPE = 'text/html;profile=mcp-app';
+    /** A view `ui://minilytics/<file>` is the HTML file of the same name in this folder. */
+    private const VIEW_PREFIX = 'ui://minilytics/';
+    private const VIEWS_DIR = __DIR__ . '/views/';
 
     /** @var array<string, Tool> */
     private array $tools = [];
@@ -63,6 +69,12 @@ final class McpServer
             'ping' => $this->result($id, new stdClass()),
             'tools/list' => $this->result($id, ['tools' => array_values(array_map(static fn(Tool $tool): array => $tool->definition(), $this->tools))]),
             'tools/call' => $this->callTool($id, $params),
+            'resources/list' => $this->result($id, ['resources' => array_map(static fn(string $uri): array => [
+                'uri' => $uri,
+                'name' => basename($uri, '.html'),
+                'mimeType' => self::VIEW_MIME_TYPE,
+            ], $this->views())]),
+            'resources/read' => $this->readView($id, $params),
             default => self::error($id, -32601, 'Method not found: ' . $message['method']),
         };
     }
@@ -77,9 +89,9 @@ final class McpServer
         $requested = $params['protocolVersion'] ?? null;
         return [
             'protocolVersion' => in_array($requested, self::PROTOCOL_VERSIONS, true) ? $requested : self::PROTOCOL_VERSIONS[0],
-            'capabilities' => ['tools' => ['listChanged' => false]],
+            'capabilities' => ['tools' => ['listChanged' => false], 'resources' => ['listChanged' => false]],
             'serverInfo' => ['name' => 'minilytics', 'title' => 'Minilytics', 'version' => self::VERSION],
-            'instructions' => 'Access to the web analytics of this Minilytics instance. Call list_sites first, then pass a site_id to the other tools. Periods default to the last 7 days; dates are in UTC. Every tool reads, except create_funnel and update_funnel, which save funnels, goals and journeys in the dashboard when the user allowed this connection to edit. Nothing can be deleted.',
+            'instructions' => 'Access to the web analytics of this Minilytics instance. Call list_sites first, then pass a site_id to the other tools. Periods default to the last 7 days; dates are in UTC. Every tool reads, except create_funnel and update_funnel, which save funnels, goals and journeys in the dashboard when the user allowed this connection to edit. Before saving one, show it with preview_funnel so the user can check it. Nothing can be deleted.',
         ];
     }
 
@@ -104,7 +116,32 @@ final class McpServer
             $failure = $tool->writes ? 'Nothing could be saved because of a server error.' : 'The analytics could not be read because of a server error.';
             return $this->result($id, ['content' => [['type' => 'text', 'text' => $failure . ' Try again later.']], 'isError' => true]);
         }
-        return $this->result($id, ['content' => [['type' => 'text', 'text' => json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)]]]);
+        $result = ['content' => [['type' => 'text', 'text' => json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)]]];
+        if ($tool->view !== null) {
+            // The view reads the same data, structured; the model keeps reading the text.
+            $result['structuredContent'] = $data;
+        }
+        return $this->result($id, $result);
+    }
+
+    /** @return list<string> the views of the tools, each listed once */
+    private function views(): array
+    {
+        return array_values(array_unique(array_filter(array_map(static fn(Tool $tool): ?string => $tool->view, $this->tools))));
+    }
+
+    private function readView(mixed $id, array $params): array
+    {
+        $uri = $params['uri'] ?? null;
+        if (!in_array($uri, $this->views(), true) || !str_starts_with($uri, self::VIEW_PREFIX)) {
+            return self::error($id, -32002, 'Resource not found: ' . (is_string($uri) ? $uri : ''));
+        }
+        return $this->result($id, ['contents' => [[
+            'uri' => $uri,
+            'mimeType' => self::VIEW_MIME_TYPE,
+            'text' => (string) file_get_contents(self::VIEWS_DIR . basename($uri)),
+            '_meta' => ['ui' => ['prefersBorder' => true]],
+        ]]]);
     }
 
     private function result(mixed $id, array|stdClass $result): array

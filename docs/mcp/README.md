@@ -57,9 +57,17 @@ Some versions of Antigravity do not finish signing in. Use an [access token](#ac
 
 Assistants read the same reports as the dashboard, such as visitors, pages, referrers, events, funnels, journeys, countries, devices and blocked bots, for any period. They can also read individual visits, as on the Sessions page: the pages viewed and events triggered, with the country and device. Visits stay anonymous: assistants never see an IP address, and a visitor's code changes every month.
 
+## Charts in the conversation
+
+Assistants that support MCP Apps, such as Claude and ChatGPT, show charts in the conversation instead of raw numbers. Traffic over time appears as on the **Overview** page, and funnels as on the **Funnels** page. Hover over the traffic chart to read the numbers of a day.
+
+Other assistants get the same numbers as text and describe them in their answer.
+
 ## Let an assistant edit funnels
 
 An assistant can also create funnels, goals and journeys, or rename them and change their steps, for example "Create a funnel from the pricing page to the signup event". It saves them in the dashboard, where they appear on the **Funnels** page for everyone in your workspace.
+
+Before saving, the assistant shows you a preview with the steps and how many visits reach each one over the period. In assistants that display charts, click **Save funnel** in the preview to save it. Otherwise, tell the assistant to save it.
 
 Each connection only reads until you allow it. In **Settings → AI assistants → Authorized access**, turn on **Can edit funnels** next to the assistant or the access token. Until then, the assistant tells you that it needs this permission. Turn it off to make the connection read-only again. Even when it can edit, an assistant can never delete a funnel, goal or journey, or anything else.
 
