@@ -127,7 +127,7 @@
             <div class="settings-card-heading">
                 <div>
                     <h3>Connect an AI assistant</h3>
-                    <p>Ask Claude, ChatGPT, Cursor and others about your traffic. They sign in with your Minilytics account and can only read your analytics.</p>
+                    <p>Ask Claude, ChatGPT, Cursor and others about your traffic. They sign in with your Minilytics account and only read your analytics, unless you let one edit your funnels below.</p>
                 </div>
             </div>
             <div class="mcp-tiles" id="mcpClientTiles" role="tablist" aria-label="Assistants"></div>
@@ -137,7 +137,7 @@
             <div class="settings-card-heading">
                 <div>
                     <h3>Authorized access</h3>
-                    <p>Assistants and access tokens that can read your analytics. Revoking one cuts its access immediately.</p>
+                    <p>Assistants and access tokens that can read your analytics. Turn on <strong>Can edit funnels</strong> to let one create and edit funnels, goals and journeys: no assistant can ever delete anything. Revoking one cuts its access immediately.</p>
                 </div>
             </div>
             <p class="settings-feedback" id="mcpAccessFeedback" role="status"></p>

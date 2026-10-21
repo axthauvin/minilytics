@@ -252,6 +252,36 @@ test('disconnecting an assistant revokes its tokens', { skip: !hasPhp }, async (
   assert.equal((await mcp(tokens.access_token)).status, 401);
 });
 
+test('an assistant edits funnels only once allowed in the settings, even after signing in again', { skip: !hasPhp }, async () => {
+  const { clientId, tokens } = await connect();
+  const create = async (token, name) => {
+    const { body } = await mcp(token, 'tools/call', { name: 'create_funnel', arguments: { site_id: 'private_site', name, steps: [{ page: '/' }] } });
+    return body.result;
+  };
+  const allow = async (canWrite, app = clientId) => browser('/dashboard/src/api/tokens.php', { method: 'PATCH', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': await csrfToken('/dashboard/') }, body: JSON.stringify({ app, can_write: canWrite }) });
+  const listed = async () => (await (await browser('/dashboard/src/api/tokens.php')).json()).apps.find((app) => app.client_id === clientId);
+
+  const refused = await create(tokens.access_token, 'Home');
+  assert.equal(refused.isError, true);
+  assert.match(refused.content[0].text, /Can edit funnels/);
+  assert.equal((await listed()).can_write, false);
+
+  assert.equal((await allow(true)).status, 200);
+  assert.equal((await listed()).can_write, true);
+  assert.equal((await create(tokens.access_token, 'Home')).isError, undefined);
+
+  // A new sign-in of the same application keeps the permission.
+  const { verifier, challenge } = pkce();
+  const redirect = await authorize({ clientId, challenge });
+  const again = await (await fetch(`${BASE}/oauth/token.php`, form({ grant_type: 'authorization_code', code: redirect.searchParams.get('code'), redirect_uri: REDIRECT_URI, client_id: clientId, code_verifier: verifier, resource: MCP_URL }))).json();
+  assert.equal((await create(again.access_token, 'Home again')).isError, undefined);
+
+  assert.equal((await allow(false)).status, 200);
+  assert.equal((await create(again.access_token, 'Refused')).isError, true);
+  assert.equal((await create(tokens.access_token, 'Refused')).isError, true);
+  assert.equal((await allow(true, 'mlc_unknown')).status, 404);
+});
+
 test('signing in requires the form CSRF token', { skip: !hasPhp }, async () => {
   const res = await fetch(`${BASE}/dashboard/login.php`, { redirect: 'manual', ...form({ email: EMAIL, password: PASSWORD }) });
   assert.equal(res.status, 200);

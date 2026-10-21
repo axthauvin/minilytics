@@ -13,7 +13,8 @@ use SQLite3;
  * OAuth 2.1 authorization server for the MCP endpoint, as the MCP
  * authorization specification describes it: assistants such as Claude or
  * ChatGPT register themselves (Dynamic Client Registration), send the user to
- * a consent screen, and receive a read-only token bound to one account.
+ * a consent screen, and receive a token bound to one account. Tokens only
+ * read until the user lets the assistant edit funnels in the settings.
  *
  * Tokens are opaque and stored as SHA-256 hashes. They are only accepted by
  * mcp.php, which is both the protected resource and the token issuer.
@@ -215,7 +216,7 @@ final class OAuthServer
     /**
      * Returns the account behind a valid, unexpired access token.
      *
-     * @return array{id: int, email: string}|null
+     * @return array{id: int, email: string, can_write: bool}|null
      */
     public static function authenticate(string $token): ?array
     {
@@ -228,19 +229,31 @@ final class OAuthServer
     /**
      * Applications the user connected through OAuth.
      *
-     * @return list<array{client_id: string, name: string, connected_at: string, last_used_at: ?string}>
+     * @return list<array{client_id: string, name: string, connected_at: string, last_used_at: ?string, can_write: bool}>
      */
     public static function connectedApps(int $userId): array
     {
-        $stmt = AuthDatabase::connection()->prepare('SELECT c.client_id, c.client_name, MIN(t.created_at) AS connected_at, MAX(t.last_used_at) AS last_used_at FROM oauth_tokens t JOIN oauth_clients c ON c.client_id = t.client_id WHERE t.user_id = :user AND t.refresh_expires_at > :now GROUP BY c.client_id, c.client_name ORDER BY connected_at DESC');
+        $stmt = AuthDatabase::connection()->prepare('SELECT c.client_id, c.client_name, MIN(t.created_at) AS connected_at, MAX(t.last_used_at) AS last_used_at, MAX(t.can_write) AS can_write FROM oauth_tokens t JOIN oauth_clients c ON c.client_id = t.client_id WHERE t.user_id = :user AND t.refresh_expires_at > :now GROUP BY c.client_id, c.client_name ORDER BY connected_at DESC');
         $stmt->bindValue(':user', $userId, SQLITE3_INTEGER);
         $stmt->bindValue(':now', time(), SQLITE3_INTEGER);
         $result = $stmt->execute();
         $apps = [];
         while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
-            $apps[] = ['client_id' => (string) $row['client_id'], 'name' => (string) $row['client_name'], 'connected_at' => (string) BearerTokens::date($row['connected_at']), 'last_used_at' => BearerTokens::date($row['last_used_at'])];
+            $apps[] = ['client_id' => (string) $row['client_id'], 'name' => (string) $row['client_name'], 'connected_at' => (string) BearerTokens::date($row['connected_at']), 'last_used_at' => BearerTokens::date($row['last_used_at']), 'can_write' => (bool) $row['can_write']];
         }
         return $apps;
+    }
+
+    /** Lets an application edit the user's funnels, goals and journeys, or not. Returns false when it is not connected. */
+    public static function allowWrite(int $userId, string $clientId, bool $allowed): bool
+    {
+        $db = AuthDatabase::connection();
+        $stmt = $db->prepare('UPDATE oauth_tokens SET can_write = :allowed WHERE user_id = :user AND client_id = :client');
+        $stmt->bindValue(':allowed', (int) $allowed, SQLITE3_INTEGER);
+        $stmt->bindValue(':user', $userId, SQLITE3_INTEGER);
+        $stmt->bindValue(':client', $clientId, SQLITE3_TEXT);
+        $stmt->execute();
+        return $db->changes() > 0;
     }
 
     /** Revokes every token the user granted to an application. */
@@ -306,7 +319,8 @@ final class OAuthServer
 
         [$access, $refresh] = self::newTokens();
         $now = time();
-        $stmt = $db->prepare('INSERT INTO oauth_tokens (client_id, user_id, access_hash, access_expires_at, refresh_hash, refresh_expires_at, created_at) VALUES (:client, :user, :access, :access_expires, :refresh, :refresh_expires, :now)');
+        // Signing in again keeps the permission the user gave this connected application in the settings.
+        $stmt = $db->prepare('INSERT INTO oauth_tokens (client_id, user_id, access_hash, access_expires_at, refresh_hash, refresh_expires_at, created_at, can_write) VALUES (:client, :user, :access, :access_expires, :refresh, :refresh_expires, :now, (SELECT COALESCE(MAX(can_write), 0) FROM oauth_tokens WHERE client_id = :client AND user_id = :user AND refresh_expires_at > :now))');
         $stmt->bindValue(':client', $clientId, SQLITE3_TEXT);
         $stmt->bindValue(':user', (int) $code['user_id'], SQLITE3_INTEGER);
         $stmt->bindValue(':access', hash('sha256', $access), SQLITE3_TEXT);

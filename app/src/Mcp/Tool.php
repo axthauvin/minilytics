@@ -6,7 +6,11 @@ namespace Minilytics\Mcp;
 
 use Closure;
 
-/** Defines a MCP tool. Tools MUST be read-only, to prevent agents to edit or alter the data. */
+/**
+ * Defines a MCP tool. Tools read the analytics, except the few that save
+ * funnels, goals and journeys ($writes): those only run for a connection the
+ * user allowed to edit, and no tool ever deletes anything.
+ */
 final class Tool
 {
     /**
@@ -21,6 +25,7 @@ final class Tool
         private readonly array $properties,
         private readonly array $required,
         private readonly Closure $handler,
+        public readonly bool $writes = false,
     ) {}
 
     /** The tool as listed by `tools/list`. */
@@ -35,7 +40,9 @@ final class Tool
             'title' => $this->title,
             'description' => $this->description,
             'inputSchema' => $schema,
-            'annotations' => ['readOnlyHint' => true, 'openWorldHint' => false],
+            'annotations' => $this->writes
+                ? ['readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => false, 'openWorldHint' => false]
+                : ['readOnlyHint' => true, 'openWorldHint' => false],
         ];
     }
 

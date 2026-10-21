@@ -63,7 +63,7 @@ final class AuthTest extends TestCase
         $userId = Auth::createUser($email, self::PASSWORD, 'member');
         $token = McpTokens::create($userId, 'Claude');
 
-        $this->assertSame(['id' => $userId, 'email' => $email], McpTokens::authenticate($token['token']));
+        $this->assertSame(['id' => $userId, 'email' => $email, 'can_write' => false], McpTokens::authenticate($token['token']));
         $this->assertNull(McpTokens::authenticate('mlt_not-a-real-token'));
     }
 
@@ -89,6 +89,23 @@ final class AuthTest extends TestCase
 
         $this->assertTrue(McpTokens::revoke($owner, $token['id']));
         $this->assertNull(McpTokens::authenticate($token['token']));
+    }
+
+    public function testOnlyTheOwnerCanLetATokenEditFunnels(): void
+    {
+        $owner = Auth::createUser('writer-' . uniqid() . '@minilytics.test', self::PASSWORD, 'member');
+        $other = Auth::createUser('intruder-' . uniqid() . '@minilytics.test', self::PASSWORD, 'member');
+        $token = McpTokens::create($owner, 'Claude Code');
+
+        $this->assertFalse(McpTokens::allowWrite($other, $token['id'], true));
+        $this->assertFalse(McpTokens::authenticate($token['token'])['can_write'] ?? null);
+
+        $this->assertTrue(McpTokens::allowWrite($owner, $token['id'], true));
+        $this->assertTrue(McpTokens::authenticate($token['token'])['can_write'] ?? null);
+        $this->assertTrue(McpTokens::forUser($owner)[0]['can_write']);
+
+        $this->assertTrue(McpTokens::allowWrite($owner, $token['id'], false));
+        $this->assertFalse(McpTokens::authenticate($token['token'])['can_write'] ?? null);
     }
 
     public function testAnInvitationCanBeAcceptedOnce(): void
