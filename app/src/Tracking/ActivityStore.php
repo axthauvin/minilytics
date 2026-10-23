@@ -6,6 +6,7 @@ namespace Minilytics\Tracking;
 
 use Minilytics\Database\DatabaseConnection;
 use Minilytics\Database\Schema;
+use Throwable;
 
 /** Writes tracked and ignored events to a website's database. */
 final class ActivityStore
@@ -23,6 +24,41 @@ final class ActivityStore
         $stmt->bindValue(':cutoff', gmdate('Y-m-d H:i:s', time() - self::SESSION_TIMEOUT), SQLITE3_TEXT);
         $row = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
         return is_array($row) && !empty($row['session_id']) ? (string) $row['session_id'] : null;
+    }
+
+    /**
+     * Records the event in the visitor's current session, or starts one. The
+     * script sends the events it held back all at once: without the lock,
+     * each would find no session yet and start a visit of its own.
+     *
+     * @param array<string, mixed> $action
+     */
+    public function recordInActiveSession(string $visitorId, array $action): void
+    {
+        if (!$this->db->isMysql()) {
+            $this->db->exec('BEGIN IMMEDIATE');
+            try {
+                $this->record($this->activeSessionId($visitorId) ?? VisitorIdentity::sessionId(), $visitorId, $action);
+                $this->db->exec('COMMIT');
+            } catch (Throwable $e) {
+                $this->db->exec('ROLLBACK');
+                throw $e;
+            }
+            return;
+        }
+        // MySQL locks are shared by the whole server, hence the website in the name (64 characters at most).
+        $lock = 'minilytics:' . sha1($this->db->siteId() . ':' . $visitorId);
+        $stmt = $this->db->prepare('SELECT GET_LOCK(:lock, 5)');
+        $stmt->bindValue(':lock', $lock, SQLITE3_TEXT);
+        $stmt->execute();
+        try {
+            // Should the lock time out, the event is still recorded, at worst in a visit of its own.
+            $this->record($this->activeSessionId($visitorId) ?? VisitorIdentity::sessionId(), $visitorId, $action);
+        } finally {
+            $stmt = $this->db->prepare('SELECT RELEASE_LOCK(:lock)');
+            $stmt->bindValue(':lock', $lock, SQLITE3_TEXT);
+            $stmt->execute();
+        }
     }
 
     /** @param array<string, mixed> $action */

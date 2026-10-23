@@ -173,6 +173,23 @@ final class TrackEndpointTest extends TestCase
         $this->assertNotSame('client-visitor', $first['visitor_id']);
     }
 
+    public function testStrictModeKeepsSimultaneousEventsInOneVisit(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            $this->markTestSkipped('PHP\'s built-in server only runs several workers on Unix.');
+        }
+        // The tracking script sends the page view and the events it held back
+        // all at once on the first interaction.
+        for ($round = 0; $round < 3; $round++) {
+            Connections::forSite('test_site')->exec('DELETE FROM user_activity');
+            $this->trackAtOnce(array_map(fn(int $i): array => $this->event(['name' => "event_{$i}"]), range(1, 8)));
+
+            $sessions = array_unique(array_column($this->storedEvents(), 'session_id'));
+            $this->assertCount(8, $this->storedEvents());
+            $this->assertCount(1, $sessions, 'Simultaneous events of a new visitor must share one visit.');
+        }
+    }
+
     public function testEnrichedModeKeepsTheClientSessionButRecognisesTheVisitorOnTheServer(): void
     {
         $enriched = ['path' => '/', 'tracking_mode' => 'enriched'];
@@ -305,6 +322,37 @@ final class TrackEndpointTest extends TestCase
         return ['status' => (int) ($match[1] ?? 0), 'body' => json_decode((string) $response, true), 'headers' => $responseHeaders];
     }
 
+    /**
+     * Sends the events in parallel, to a server running several workers.
+     *
+     * @param list<array<string, mixed>> $payloads
+     */
+    private function trackAtOnce(array $payloads): void
+    {
+        $multi = curl_multi_init();
+        $handles = [];
+        foreach ($payloads as $payload) {
+            $handle = curl_init(self::serverUrl('workers') . '/track.php');
+            curl_setopt_array($handle, [
+                CURLOPT_POST => true,
+                CURLOPT_POSTFIELDS => json_encode($payload),
+                CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'Origin: ' . self::ORIGIN, 'User-Agent: ' . self::BROWSER],
+                CURLOPT_RETURNTRANSFER => true,
+            ]);
+            curl_multi_add_handle($multi, $handle);
+            $handles[] = $handle;
+        }
+        do {
+            curl_multi_exec($multi, $running);
+            curl_multi_select($multi);
+        } while ($running > 0);
+        foreach ($handles as $handle) {
+            $this->assertSame(200, curl_getinfo($handle, CURLINFO_RESPONSE_CODE));
+            curl_multi_remove_handle($multi, $handle);
+        }
+        curl_multi_close($multi);
+    }
+
     /** @return list<array{session_id: string, visitor_id: string, action: array<string, mixed>}> */
     private function storedEvents(): array
     {
@@ -324,6 +372,9 @@ final class TrackEndpointTest extends TestCase
             unset($env['MINILYTICS_TRUST_CLOUDFLARE']);
             if ($name === 'cloudflare') {
                 $env['MINILYTICS_TRUST_CLOUDFLARE'] = '1';
+            }
+            if ($name === 'workers') {
+                $env['PHP_CLI_SERVER_WORKERS'] = '8';
             }
             self::$servers[$name] = PhpServer::start(dirname(__DIR__, 3), $env);
         }
