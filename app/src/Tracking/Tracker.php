@@ -70,10 +70,12 @@ final class Tracker
         // The visitor is always recognised by the server, with a salt that changes every month.
         // With consent, the browser keeps the visit together when the network changes.
         $visitor = VisitorIdentity::visitorId((string) $site['id'], $ip, $userAgent->value);
-        $session = $data['_ml_tracking_mode'] === 'enriched' && $payload->sessionId !== ''
-            ? $payload->sessionId
-            : ($store->activeSessionId($visitor) ?? VisitorIdentity::sessionId());
-        $store->record($session, $visitor, ['site_id' => $site['id'], 'name' => $name, 'data' => $data]);
+        $action = ['site_id' => $site['id'], 'name' => $name, 'data' => $data];
+        if ($data['_ml_tracking_mode'] === 'enriched' && $payload->sessionId !== '') {
+            $store->record($payload->sessionId, $visitor, $action);
+        } else {
+            $store->recordInActiveSession($visitor, $action);
+        }
         return ['success' => true];
     }
 

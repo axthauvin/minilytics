@@ -15,6 +15,10 @@ final class DatabaseConnection
     {
         return $this->driver !== 'sqlite';
     }
+    public function siteId(): string
+    {
+        return $this->siteId;
+    }
     public function prepare(string $sql): DatabaseStatement|false
     {
         $statement = $this->connection->prepare($this->translate($sql));
