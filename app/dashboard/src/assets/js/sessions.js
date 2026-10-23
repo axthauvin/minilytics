@@ -307,7 +307,6 @@ const SessionsPage = {
         const avatarUrl = s.avatar_url || Icons.getDiceBearGlyphUrl(visitorId);
         const fallbackSvg = Icons.getIdenticonSvgDataUri(visitorId, 40);
         const visitBadge = this.visitsBadge(s);
-        const sessionId = s.session_id || "Unknown";
         const country = s.country || "Unknown";
         const countryCode = s.country_code || "UN";
         const city = s.city || "";
@@ -329,7 +328,7 @@ const SessionsPage = {
                   </div>
                   <div class="session-card-info">
                       <div class="session-card-title-row">
-                          <span class="session-visitor-name session-id-full" title="${this.escapeHtml(sessionId)}">Session ${this.escapeHtml(sessionId)}</span>
+                          <span class="session-visitor-name session-id-full" title="Visitor ${this.escapeHtml(visitorId)}">Visitor ${this.escapeHtml(visitorId)}</span>
                           <span class="session-badge-country">
                               ${Icons.getCountryFlag(countryCode, { size: 14 })}
                               <span>${this.escapeHtml(city ? `${country}, ${city}` : country)}</span>
@@ -650,9 +649,11 @@ const SessionsPage = {
 
   /** "2 visits" on a visitor's card, when they came more than once. */
   visitsBadge(session) {
-    const visits = Number(session.visit_count) || 1;
+    const inPeriod = Number(session.visit_count) || 1;
+    const visits = Math.max(Number(session.total_visit_count) || 0, inPeriod);
     if (visits < 2) return "";
-    return `<span class="session-badge-returning" title="Returning visitor: ${visits} visits in this period">${Icons.get("repeat", { size: 11 })}<span>${visits} visits</span></span>`;
+    const title = visits > inPeriod ? `Returning visitor: ${visits} visits, ${inPeriod} in this period` : `Returning visitor: ${visits} visits in this period`;
+    return `<span class="session-badge-returning" title="${title}">${Icons.get("repeat", { size: 11 })}<span>${visits} visits</span></span>`;
   },
 
   parseTimestamp(ts) {

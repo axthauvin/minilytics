@@ -305,6 +305,10 @@ try {
         $latestStmt->bindValue(':visitor', $visitorId, SQLITE3_TEXT);
         $latestStmt->bindValue(':end_date', $endDateStr, SQLITE3_TEXT);
         $sId = (string) ($latestStmt->execute()->fetchArray(SQLITE3_NUM)[0] ?? $visitorId);
+        // All the visits of the visitor, as their journey shows them, including those outside the period.
+        $totalStmt = $db->prepare("SELECT COUNT(DISTINCT session_id) FROM user_activity WHERE visitor_id = :visitor OR session_id = :visitor");
+        $totalStmt->bindValue(':visitor', $visitorId, SQLITE3_TEXT);
+        $totalVisits = (int) $totalStmt->execute()->fetchArray(SQLITE3_NUM)[0];
         $durSec = max(0, (int) $sr['duration_seconds']);
         $durLabel = $formatDurationLabel($durSec);
 
@@ -383,6 +387,7 @@ try {
             'session_id' => $sId,
             'visitor_id' => $visitorId,
             'visit_count' => (int) $sr['visit_count'],
+            'total_visit_count' => max($totalVisits, (int) $sr['visit_count']),
             'started_at' => $sr['started_at'],
             'last_active_at' => $sr['last_active_at'],
             'time_ago' => $timeAgo,
