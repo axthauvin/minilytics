@@ -168,7 +168,7 @@ class MinilyticsChart {
         const zr = this.chart.getZr();
         zr.on('click', (e) => {
             if (!this.data?.length) return;
-            const index = this.getIndexAtPixel(e.offsetX, e.offsetY);
+            const index = this.getIndexAtPixel(e.offsetX);
             const item = this.data[index];
             if (!item) return;
             if (this.lockTooltipOnClick) this.lockTooltip(index);
@@ -226,9 +226,14 @@ class MinilyticsChart {
         return value >= median * 3;
     }
 
-    getIndexAtPixel(x, y) {
-        const index = Math.round(this.chart.convertFromPixel({ xAxisIndex: 0 }, [x, y])?.[0] ?? -1);
-        return Math.max(0, Math.min(this.data.length - 1, index));
+    /** The nearest point to a horizontal position, between the first and last points' positions. */
+    getIndexAtPixel(x) {
+        const last = this.data.length - 1;
+        if (last < 1) return 0;
+        const first = this.chart.convertToPixel({ xAxisIndex: 0 }, 0);
+        const end = this.chart.convertToPixel({ xAxisIndex: 0 }, last);
+        const index = Math.round(((x - first) / (end - first)) * last);
+        return Math.max(0, Math.min(last, index));
     }
 
     /** Series to draw, background first: visitors are a subset of views, so they go in front. */
