@@ -129,51 +129,69 @@ const App = {
   },
 
   bindSidebarCollapse() {
+    const root = document.documentElement;
     const sidebar = document.getElementById("sidebar");
     const collapseBtn = document.getElementById("btnSidebarCollapse");
     const headerToggleBtn = document.getElementById("btnHeaderSidebarToggle");
-    const mobileBackdrop = document.getElementById("mobileNavBackdrop");
-    if (!sidebar) return;
+    const backdrop = document.getElementById("mobileNavBackdrop");
+    const main = document.querySelector(".main-wrapper");
+    if (!sidebar || document.body.classList.contains("embed-mode")) return;
 
-    const isMobile = () => window.matchMedia("(max-width: 767px)").matches;
-    const closeMobileNavigation = () => {
-      document.body.classList.remove("sidebar-mobile-open");
-      if (headerToggleBtn) headerToggleBtn.setAttribute("aria-expanded", "false");
+    // Phones get a drawer, tablets an icon rail that opens over the page, and
+    // desktops a sidebar the user may shrink to the rail (remembered).
+    // index.php applies the same rule before the first paint.
+    const phone = window.matchMedia("(max-width: 767px)");
+    const tablet = window.matchMedia("(min-width: 768px) and (max-width: 1099px)");
+    const isOverlay = () => phone.matches || tablet.matches;
+    const isHidden = () => document.querySelector(".app-container")?.classList.contains("is-portal");
+
+    let collapsedByUser = false;
+    try {
+      collapsedByUser = localStorage.getItem("minilytics_sidebar_collapsed") === "true";
+    } catch (e) {}
+    let isOpen = false;
+    let opener = null;
+
+    const render = () => {
+      const compact = !isOpen && (tablet.matches || (!isOverlay() && collapsedByUser));
+      root.classList.toggle("nav-compact", compact);
+      root.classList.toggle("nav-open", isOpen);
+      // While the overlay is open, only the navigation can be reached.
+      if (main) main.inert = isOpen;
+      if (headerToggleBtn) headerToggleBtn.setAttribute("aria-expanded", String(isOpen));
+      this.updateSidebarCollapseLabels(isOverlay() ? (isOpen ? "close" : "open") : compact ? "expand" : "collapse");
+      // The rail hides the labels: show them as tooltips instead.
+      sidebar.querySelectorAll(".nav-title").forEach((title) => {
+        const link = title.closest("a, button");
+        if (compact && !link.hasAttribute("title")) {
+          link.title = title.textContent;
+          link.dataset.railTooltip = "";
+        } else if (!compact && "railTooltip" in link.dataset) {
+          link.removeAttribute("title");
+          delete link.dataset.railTooltip;
+        }
+      });
     };
 
-    // Check stored state on initialization
-    let isCollapsed = false;
-    try {
-      isCollapsed = localStorage.getItem("minilytics_sidebar_collapsed") === "true";
-    } catch (e) {}
+    const setOpen = (open, { restoreFocus = true } = {}) => {
+      if (open === isOpen || (open && isHidden())) return;
+      isOpen = open;
+      if (open) opener = document.activeElement;
+      render();
+      if (open && collapseBtn) collapseBtn.focus();
+      else if (!open && restoreFocus && opener && opener.isConnected) opener.focus();
+    };
 
-    if (isCollapsed) {
-      sidebar.classList.add("collapsed");
-      document.body.classList.add("sidebar-is-collapsed");
-      this.updateSidebarCollapseLabels(true);
-    } else {
-      document.documentElement.classList.remove("sidebar-preload-collapsed");
-    }
     const toggleSidebar = () => {
-      if (isMobile()) {
-        const isOpen = document.body.classList.toggle("sidebar-mobile-open");
-        if (headerToggleBtn) headerToggleBtn.setAttribute("aria-expanded", String(isOpen));
+      if (isOverlay()) {
+        setOpen(!isOpen);
         return;
       }
-      const willBeCollapsed = !sidebar.classList.contains("collapsed");
-      sidebar.classList.toggle("collapsed", willBeCollapsed);
-      document.body.classList.toggle("sidebar-is-collapsed", willBeCollapsed);
-      if (willBeCollapsed) {
-        document.documentElement.classList.add("sidebar-preload-collapsed");
-      } else {
-        document.documentElement.classList.remove("sidebar-preload-collapsed");
-      }
-
+      collapsedByUser = !collapsedByUser;
       try {
-        localStorage.setItem("minilytics_sidebar_collapsed", willBeCollapsed ? "true" : "false");
+        localStorage.setItem("minilytics_sidebar_collapsed", collapsedByUser ? "true" : "false");
       } catch (e) {}
-
-      this.updateSidebarCollapseLabels(willBeCollapsed);
+      render();
 
       // Trigger redraw/resize for charts and dynamic containers
       setTimeout(() => {
@@ -184,33 +202,24 @@ const App = {
       }, 240);
     };
 
-    if (collapseBtn) {
-      collapseBtn.addEventListener("click", (e) => {
-        e.preventDefault();
-        toggleSidebar();
-      });
-    }
+    render();
 
-    if (headerToggleBtn) {
-      headerToggleBtn.addEventListener("click", (e) => {
-        e.preventDefault();
-        if (isMobile()) toggleSidebar();
-      });
-    }
-
-
-    if (mobileBackdrop) mobileBackdrop.addEventListener("click", closeMobileNavigation);
-    document.querySelectorAll(".sidebar a").forEach((link) => {
-      link.addEventListener("click", () => {
-        if (isMobile()) closeMobileNavigation();
-      });
+    if (collapseBtn) collapseBtn.addEventListener("click", toggleSidebar);
+    if (headerToggleBtn) headerToggleBtn.addEventListener("click", () => setOpen(!isOpen));
+    if (backdrop) backdrop.addEventListener("click", () => setOpen(false));
+    // Following a link closes the overlay; focus then stays with the new page.
+    sidebar.querySelectorAll("a, .nav-item button").forEach((link) => {
+      link.addEventListener("click", () => setOpen(false, { restoreFocus: false }));
     });
     window.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") closeMobileNavigation();
+      if (e.key === "Escape" && isOpen) setOpen(false);
     });
-    window.addEventListener("resize", () => {
-      if (!isMobile()) closeMobileNavigation();
-    });
+    [phone, tablet].forEach((query) =>
+      query.addEventListener("change", () => {
+        isOpen = false;
+        render();
+      }),
+    );
 
     // Keyboard shortcut: Ctrl+B or Cmd+B
     window.addEventListener("keydown", (e) => {
@@ -224,13 +233,18 @@ const App = {
     });
   },
 
-  updateSidebarCollapseLabels(isCollapsed) {
+  updateSidebarCollapseLabels(action) {
     const collapseBtn = document.getElementById("btnSidebarCollapse");
-    const label = isCollapsed ? "Agrandir la navigation (Ctrl+B)" : "Réduire la navigation (Ctrl+B)";
-    if (collapseBtn) {
-      collapseBtn.setAttribute("title", label);
-      collapseBtn.setAttribute("aria-label", label);
-    }
+    if (!collapseBtn) return;
+    const label = {
+      collapse: "Collapse navigation",
+      expand: "Expand navigation",
+      open: "Open navigation",
+      close: "Close navigation",
+    }[action];
+    collapseBtn.setAttribute("title", `${label} (Ctrl+B)`);
+    collapseBtn.setAttribute("aria-label", label);
+    collapseBtn.setAttribute("aria-expanded", String(action === "collapse" || action === "close"));
   },
 
   bindHeaderActions() {
@@ -668,12 +682,12 @@ const App = {
 
     // Update nav active state
     document.querySelectorAll(".nav-item").forEach((item) => {
-      const page = item.dataset.page;
-      if (page === pageName) {
-        item.classList.add("active");
-      } else {
-        item.classList.remove("active");
-      }
+      const isActive = item.dataset.page === pageName;
+      item.classList.toggle("active", isActive);
+      const link = item.matches("a") ? item : item.querySelector("a");
+      if (!link) return;
+      if (isActive) link.setAttribute("aria-current", "page");
+      else link.removeAttribute("aria-current");
     });
 
     // Update views visibility
