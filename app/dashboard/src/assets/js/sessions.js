@@ -21,7 +21,7 @@ const SessionsPage = {
   CONTEXT_KEYS: new Set([
     "browser", "os", "device", "screen", "viewport", "language", "country", "country_code", "region", "city",
     "hostname", "site_id", "session_id", "path", "title", "url", "referrer", "search", "hash", "tracking_mode",
-    "_ml_tracking_mode",
+    "_ml_tracking_mode", "_ml_revenue",
   ]),
 
   init() {
@@ -344,6 +344,7 @@ const SessionsPage = {
                           <span class="session-meta-item" title="${pageviewCount} page view${pageviewCount === 1 ? "" : "s"}">${Icons.get("file-text", { size: 12 })} ${pageviewCount} page view${pageviewCount === 1 ? "" : "s"}</span>
                           <span class="session-meta-divider">·</span>
                           <span class="session-meta-item" title="${eventCount} event${eventCount === 1 ? "" : "s"}">${Icons.get("zap", { size: 12 })} ${eventCount} event${eventCount === 1 ? "" : "s"}</span>
+                          ${s.revenue > 0 ? `<span class="session-meta-divider">·</span><span class="session-revenue-badge" title="Spent during these visits">${Icons.get("banknote", { size: 12 })} ${this.escapeHtml(RevenuePage.money(s.revenue, s.currency))}</span>` : ""}
                           ${flowChips ? `<span class="session-meta-divider">|</span><div class="session-flow-bar">${flowChips}</div>` : ""}
                       </div>
                   </div>
@@ -595,6 +596,8 @@ const SessionsPage = {
   journeyStep(evt, visitEvents, visit) {
     const isPageview = evt.name === "pageview";
     const data = evt.data && typeof evt.data === "object" ? evt.data : {};
+    const amount = Number(data._ml_revenue);
+    const isPurchase = !isPageview && amount > 0;
     const title = isPageview ? data.path || "/" : evt.name;
     const context = isPageview ? data.title || "" : data.path || "";
     const date = this.parseTimestamp(evt.timestamp);
@@ -630,11 +633,12 @@ const SessionsPage = {
       : "";
 
     return `
-      <li class="visit-step ${isPageview ? "is-pageview" : "is-event"}">
+      <li class="visit-step ${isPageview ? "is-pageview" : "is-event"}${isPurchase ? " is-purchase" : ""}">
         <span class="visit-step-time">${this.escapeHtml(time)}</span>
-        <span class="visit-step-icon">${Icons.get(isPageview ? "file-text" : "zap", { size: 14 })}</span>
+        <span class="visit-step-icon">${Icons.get(isPageview ? "file-text" : isPurchase ? "banknote" : "zap", { size: 14 })}</span>
         <div class="visit-step-main">
           ${isPageview ? this.pageLink(data, title, "visit-step-title") : `<span class="visit-step-title">${this.escapeHtml(title)}</span>`}
+          ${isPurchase ? `<span class="visit-step-amount">${this.escapeHtml(RevenuePage.money(amount, typeof data.currency === "string" ? data.currency.toUpperCase() : null))}</span>` : ""}
           ${context ? (isPageview ? `<span class="visit-step-context">${this.escapeHtml(context)}</span>` : this.pageLink(data, context, "visit-step-context")) : ""}
           ${propertiesToggle}
         </div>

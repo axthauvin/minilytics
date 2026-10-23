@@ -36,6 +36,24 @@ Your events then appear on the **Events** page of the dashboard.
 
 ![The Events page, with the number of events and their trend over the week](../assets/events.png)
 
+## Measure revenue
+
+To see how much your website earns, call `minilytics.revenue` when someone pays, with the name of the event, the amount and, if you want, some details.
+
+```js
+minilytics.revenue("purchase", 49.9, { currency: "EUR", order_id: "1042" });
+```
+
+Only these events count as money: a `revenue` property sent with `minilytics.track` stays an ordinary property.
+
+- The amount must be a positive number.
+- `currency` is the three-letter code of the currency, such as `EUR` or `USD`. Amounts are added up in one currency only: the one used by most orders. Orders without a currency count in it, and orders in another currency are listed apart.
+- `order_id` is optional but recommended. An order is counted only once, so a visitor reloading the confirmation page does not count it twice.
+
+Any event name works, so you can tell apart a `purchase` from a `subscription`.
+
+The **Revenue** page then shows your revenue, orders, average order and conversion rate, compared with the previous period. It also shows which channels, sources, campaigns, landing pages and countries bring in the money. Each order is attributed to the visit it was made in, and the **Sessions** page shows what each visitor spent.
+
 ## Visits from robots
 
 As with any analytics tool, you want to count only real visitors, not automated programs. Minilytics tries to ignore robots in two ways.

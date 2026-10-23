@@ -171,6 +171,55 @@ final class SiteAnalyticsTest extends TestCase
         $this->assertNull($bots['recent'][1]['bot']);
     }
 
+    public function testRevenueAddsUpOrdersAndCountsAnOrderIdOnce(): void
+    {
+        $this->record('s1', 'v1', 'pageview', ['path' => '/shop'], 3600);
+        $this->record('s1', 'v1', 'purchase', ['_ml_revenue' => 40, 'currency' => 'eur', 'order_id' => 'A1'], 3500);
+        $this->record('s1', 'v1', 'purchase', ['_ml_revenue' => 40, 'currency' => 'EUR', 'order_id' => 'A1'], 3400);
+        $this->record('s2', 'v2', 'pageview', ['path' => '/'], 1800);
+        $this->record('s2', 'v2', 'purchase', ['_ml_revenue' => '20.5'], 1700);
+        $this->record('s3', 'v3', 'pageview', ['path' => '/'], 900);
+        $this->record('s3', 'v3', 'signup', ['revenue' => 75], 800);
+
+        $revenue = $this->analytics('7d')->revenue();
+
+        $this->assertSame('EUR', $revenue['currency']);
+        $this->assertSame(60.5, $revenue['summary']['revenue'], 'The reloaded A1 counts once, an order without currency counts in EUR, a plain revenue property is not money.');
+        $this->assertSame(2, $revenue['summary']['orders']);
+        $this->assertSame(30.25, $revenue['summary']['average_order']);
+        $this->assertSame(66.67, $revenue['summary']['conversion_rate'], '2 of the 3 visitors bought.');
+        $this->assertSame(60.5, array_sum(array_column($revenue['timeseries'], 'revenue')));
+    }
+
+    public function testRevenueOnlyAddsUpTheMainCurrency(): void
+    {
+        $this->record('s1', 'v1', 'purchase', ['_ml_revenue' => 10, 'currency' => 'EUR'], 3600);
+        $this->record('s2', 'v2', 'purchase', ['_ml_revenue' => 15, 'currency' => 'EUR'], 1800);
+        $this->record('s3', 'v3', 'purchase', ['_ml_revenue' => 99, 'currency' => 'USD'], 600);
+
+        $revenue = $this->analytics('7d')->revenue();
+
+        $this->assertSame(25.0, $revenue['summary']['revenue']);
+        $this->assertSame([['currency' => 'USD', 'orders' => 1]], $revenue['other_currencies']);
+    }
+
+    public function testRevenueIsAttributedToTheSessionsFirstPageview(): void
+    {
+        $this->record('s1', 'v1', 'pageview', ['path' => '/blog', 'utm_source' => 'newsletter', 'utm_medium' => 'email', 'utm_campaign' => 'launch'], 3600);
+        $this->record('s1', 'v1', 'pageview', ['path' => '/checkout'], 3500);
+        $this->record('s1', 'v1', 'purchase', ['_ml_revenue' => 30, 'path' => '/checkout', 'country' => 'France'], 3400);
+        $this->record('s2', 'v2', 'pageview', ['path' => '/before'], 9 * 86400);
+        $this->record('s2', 'v2', 'purchase', ['_ml_revenue' => 5], 8 * 86400);
+
+        $revenue = $this->analytics('7d')->revenue();
+
+        $this->assertSame([['revenue' => 30.0, 'name' => 'launch', 'orders' => 1]], $revenue['breakdowns']['campaigns']);
+        $this->assertSame('Email', $revenue['breakdowns']['channels'][0]['name']);
+        $this->assertSame('/blog', $revenue['breakdowns']['landing_pages'][0]['name']);
+        $this->assertSame('France', $revenue['breakdowns']['countries'][0]['name']);
+        $this->assertSame(5.0, $revenue['summary']['previous']['revenue']);
+    }
+
     private function analytics(string $range): SiteAnalytics
     {
         return SiteAnalytics::open('test_site', Period::from($range, now: $this->now));

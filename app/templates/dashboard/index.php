@@ -28,6 +28,7 @@ use Minilytics\Http\View;
     <link rel="stylesheet" href="<?= Asset::url('/dashboard/src/assets/css/dashboard.css') ?>">
     <link rel="stylesheet" href="<?= Asset::url('/dashboard/src/assets/css/overview.css') ?>">
     <link rel="stylesheet" href="<?= Asset::url('/dashboard/src/assets/css/acquisition.css') ?>">
+    <link rel="stylesheet" href="<?= Asset::url('/dashboard/src/assets/css/revenue.css') ?>">
     <link rel="stylesheet" href="<?= Asset::url('/dashboard/src/assets/css/site-setup.css') ?>">
     <link rel="stylesheet" href="<?= Asset::url('/dashboard/src/assets/css/settings.css') ?>">
     <link rel="stylesheet" href="<?= Asset::url('/dashboard/src/assets/css/funnels.css') ?>">
@@ -70,7 +71,7 @@ use Minilytics\Http\View;
             <div class="demo-banner" role="note">
                 <?php if ($isEmbed): ?>
                 <nav class="demo-embed-tabs" aria-label="Demo sections">
-                    <?php foreach (['overview' => 'Overview', 'acquisition' => 'Acquisition', 'sessions' => 'Sessions', 'events' => 'Events', 'funnels' => 'Funnels'] as $page => $label): ?>
+                    <?php foreach (['overview' => 'Overview', 'acquisition' => 'Acquisition', 'sessions' => 'Sessions', 'events' => 'Events', 'funnels' => 'Funnels', 'revenue' => 'Revenue'] as $page => $label): ?>
                     <a href="#<?php echo $page; ?>" class="nav-item" data-page="<?php echo $page; ?>"><?php echo $label; ?></a>
                     <?php endforeach; ?>
                 </nav>
@@ -113,6 +114,7 @@ use Minilytics\Http\View;
                 <!-- Page 3: User Sessions -->
                 <?php include View::path('dashboard/pages/sessions'); ?>
                 <?php include View::path('dashboard/pages/funnels'); ?>
+                <?php include View::path('dashboard/pages/revenue'); ?>
                 <?php include View::path('dashboard/pages/settings'); ?>
             </main>
             <p class="app-footnote">This product includes GeoLite2 data created by MaxMind, available from <a href="https://www.maxmind.com" target="_blank" rel="noopener noreferrer">https://www.maxmind.com</a></p>
@@ -142,6 +144,7 @@ use Minilytics\Http\View;
     <script src="<?= Asset::url('/dashboard/src/assets/js/events.js') ?>"></script>
     <script src="<?= Asset::url('/dashboard/src/assets/js/sessions.js') ?>"></script>
     <script src="<?= Asset::url('/dashboard/src/assets/js/funnels.js') ?>"></script>
+    <script src="<?= Asset::url('/dashboard/src/assets/js/revenue.js') ?>"></script>
     <script src="<?= Asset::url('/dashboard/src/assets/js/changelog.js') ?>"></script>
     <script src="<?= Asset::url('/dashboard/src/assets/js/settings.js') ?>"></script>
     <script src="<?= Asset::url('/dashboard/src/assets/js/app.js') ?>"></script>

@@ -259,6 +259,8 @@ try {
             MAX(timestamp) as last_active_at,
             SUM(CASE WHEN json_extract(action, '$.name') = 'pageview' THEN 1 ELSE 0 END) as pageview_count,
             SUM(CASE WHEN json_extract(action, '$.name') NOT IN ('pageview', '_ml_engaged') THEN 1 ELSE 0 END) as event_count,
+            SUM(CASE WHEN json_extract(action, '$.data._ml_revenue') > 0 THEN json_extract(action, '$.data._ml_revenue') + 0 ELSE 0 END) as revenue,
+            MAX(CASE WHEN json_extract(action, '$.data._ml_revenue') > 0 THEN json_extract(action, '$.data.currency') END) as currency,
             (strftime('%s', MAX(timestamp)) - strftime('%s', MIN(timestamp))) as duration_seconds
         FROM user_activity
         WHERE {$whereClause}
@@ -279,6 +281,8 @@ try {
             MAX(last_active_at) as last_active_at,
             SUM(pageview_count) as pageview_count,
             SUM(event_count) as event_count,
+            SUM(revenue) as revenue,
+            MAX(currency) as currency,
             SUM(duration_seconds) as duration_seconds
         FROM ({$visitsSql}) visits
         GROUP BY visitor_key
@@ -386,6 +390,8 @@ try {
             'duration_label' => $durLabel,
             'pageview_count' => (int) $sr['pageview_count'],
             'event_count' => (int) $sr['event_count'],
+            'revenue' => round((float) $sr['revenue'], 2),
+            'currency' => $sr['currency'] !== null ? strtoupper((string) $sr['currency']) : null,
             'entry_page' => $entryPage ?: '/',
             'referrer' => $referrer ?: 'Direct',
             'browser' => $browser,

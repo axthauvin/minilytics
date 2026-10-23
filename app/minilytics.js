@@ -508,6 +508,21 @@
             name === "pageview" || !name ? pageview(data) : send(name, data);
         },
         pageview: pageview,
+        // Only events sent this way count as revenue: a "revenue" property on
+        // an ordinary event stays a plain property.
+        revenue: function (name, amount, data) {
+            var value = Number(amount);
+            if (!name || !isFinite(value) || value <= 0) {
+                reportError(
+                    "minilytics.revenue() expects an event name and a positive amount.",
+                    { event: name, amount: amount },
+                );
+                return;
+            }
+            var d = Object.assign({}, data);
+            d._ml_revenue = value;
+            send(String(name), d);
+        },
         optOut: function () {
             try {
                 localStorage.setItem("minilytics_opt_out", "true");

@@ -12,7 +12,7 @@ use Minilytics\Sites\SiteRegistry;
  *
  * Turns a website into the public demo: anonymous visitors can browse it and
  * it holds a rolling window of made-up traffic so every dashboard tab
- * (Overview, Acquisition, Events, Sessions, Funnels) has data. Run it once:
+ * (Overview, Acquisition, Events, Sessions, Funnels, Revenue) has data. Run it once:
  * the website then fills itself in each time someone looks at it, and drops
  * the visits older than the window (see Minilytics\Sites\DemoTraffic).
  *

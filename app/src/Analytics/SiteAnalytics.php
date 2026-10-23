@@ -12,6 +12,7 @@ use Minilytics\Analytics\Reports\EventsReport;
 use Minilytics\Analytics\Reports\FunnelsReport;
 use Minilytics\Analytics\Reports\PagesReport;
 use Minilytics\Analytics\Reports\ReferrersReport;
+use Minilytics\Analytics\Reports\RevenueReport;
 use Minilytics\Analytics\Reports\SessionsReport;
 use Minilytics\Analytics\Reports\SummaryReport;
 use Minilytics\Analytics\Reports\TimeseriesReport;
@@ -144,6 +145,12 @@ final class SiteAnalytics
     public function acquisition(): array
     {
         return (new AcquisitionReport($this->query))->get();
+    }
+
+    /** @see RevenueReport::get() */
+    public function revenue(): array
+    {
+        return (new RevenueReport($this->query, $this->summary))->get();
     }
 
     /** @see SessionsReport::latest() */

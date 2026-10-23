@@ -119,7 +119,7 @@ test('missing, unknown and revoked tokens are rejected by MCP', { skip: !hasPhp 
 test('a token never opens the dashboard endpoints, writes or administration', { skip: !hasPhp }, async () => {
   const json = { 'Content-Type': 'application/json', ...bearer() };
   const attempts = [
-    ...['stats.php', 'events.php', 'sessions.php', 'acquisition.php', 'funnels.php'].map((endpoint) => [`${endpoint}?site_id=private_site&range=7d`, { headers: bearer() }]),
+    ...['stats.php', 'events.php', 'sessions.php', 'acquisition.php', 'funnels.php', 'revenue.php'].map((endpoint) => [`${endpoint}?site_id=private_site&range=7d`, { headers: bearer() }]),
     ['funnels.php?site_id=private_site', { method: 'POST', headers: json, body: JSON.stringify({ name: 'x', steps: [] }) }],
     ['sessions.php?site_id=private_site&session_id=s1', { method: 'DELETE', headers: bearer() }],
     ['privacy.php', { method: 'POST', headers: json, body: JSON.stringify({ visitor_id: 'v1' }) }],
