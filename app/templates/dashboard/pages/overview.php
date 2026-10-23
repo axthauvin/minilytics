@@ -120,7 +120,7 @@
 
         <!-- Canvas Container -->
         <div class="canvas-wrapper">
-            <canvas id="overviewChart" class="chart-canvas"></canvas>
+            <div id="overviewChart" class="chart-canvas"></div>
             <div id="chartTooltip" class="chart-tooltip"></div>
         </div>
     </div>
@@ -231,7 +231,7 @@
         <div class="bot-explorer">
             <div class="bot-chart">
                 <div class="canvas-wrapper">
-                    <canvas id="botsChart" class="chart-canvas"></canvas>
+                    <div id="botsChart" class="chart-canvas"></div>
                     <div id="botsChartTooltip" class="chart-tooltip"></div>
                 </div>
             </div>
