@@ -18,11 +18,11 @@ const RevenuePage = {
 
   esc(v) { const n = document.createElement("span"); n.textContent = v ?? ""; return n.innerHTML; },
 
-  /** Amount in the website's currency, or a plain number when its events send none. */
-  money(value) {
+  /** Amount in a currency (the website's by default), or a plain number without one. */
+  money(value, currency = this.currency) {
     const options = { minimumFractionDigits: 2, maximumFractionDigits: 2 };
     try {
-      if (this.currency) return Number(value).toLocaleString("en-US", { style: "currency", currency: this.currency, ...options });
+      if (currency) return Number(value).toLocaleString("en-US", { style: "currency", currency, ...options });
     } catch (e) {}
     return Number(value).toLocaleString("en-US", options);
   },
@@ -94,9 +94,19 @@ const RevenuePage = {
       ? orders.map((order) => {
         const date = new Date(`${order.timestamp.replace(" ", "T")}Z`);
         const when = `${date.toLocaleDateString("en-US", { month: "short", day: "numeric" })} · ${TimeFormat.time(date)}`;
-        return `<tr><td>${this.esc(when)}</td><td>${this.esc(order.event)}</td><td>${order.order_id ? this.esc(order.order_id) : '<span class="revenue-muted">—</span>'}</td><td>${this.esc(order.path)}</td><td class="num"><strong>${this.money(order.revenue)}</strong></td></tr>`;
+        return `<tr data-session="${this.esc(order.session_id)}" title="Open this visit"><td>${this.esc(when)}</td><td>${this.esc(order.event)}</td><td>${order.order_id ? this.esc(order.order_id) : '<span class="revenue-muted">—</span>'}</td><td>${this.esc(order.path)}</td><td class="num"><strong>${this.money(order.revenue)}</strong></td></tr>`;
       }).join("")
       : '<tr><td colspan="5" class="empty-state">No orders in this period</td></tr>';
+    body.querySelectorAll("tr[data-session]").forEach((row) => row.addEventListener("click", () => this.openSession(row.dataset.session)));
+  },
+
+  /** Opens the visit an order was made in, on the Sessions page. */
+  openSession(sessionId) {
+    const url = new URL(window.location);
+    url.searchParams.set("session_id", sessionId);
+    url.hash = "sessions";
+    window.history.pushState({}, "", url);
+    window.App?.handleRoute();
   },
 };
 window.RevenuePage = RevenuePage;

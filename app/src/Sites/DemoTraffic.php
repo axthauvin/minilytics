@@ -368,10 +368,10 @@ final class DemoTraffic
             }
             // Readers sponsor the project or buy a support plan, for the Revenue page.
             if (in_array($path, ['/install.html', '/changelog/'], true) && mt_rand(1, 100) <= 14) {
-                $hits[] = [$time + mt_rand(90, 200), 'sponsor', $eventBase + ['revenue' => [5, 10, 10, 25, 50][mt_rand(0, 4)], 'currency' => 'EUR', 'order_id' => sprintf('sp_%08x', mt_rand())]];
+                $hits[] = [$time + mt_rand(90, 200), 'sponsor', $eventBase + ['_ml_revenue' => [5, 10, 10, 25, 50][mt_rand(0, 4)], 'currency' => 'EUR', 'order_id' => sprintf('sp_%08x', mt_rand())]];
             }
             if (str_starts_with($path, '/docs/') && mt_rand(1, 100) <= 4) {
-                $hits[] = [$time + mt_rand(60, 180), 'support_plan', $eventBase + ['revenue' => [49, 49, 99, 249][mt_rand(0, 3)], 'currency' => 'EUR', 'order_id' => sprintf('sup_%08x', mt_rand())]];
+                $hits[] = [$time + mt_rand(60, 180), 'support_plan', $eventBase + ['_ml_revenue' => [49, 49, 99, 249][mt_rand(0, 3)], 'currency' => 'EUR', 'order_id' => sprintf('sup_%08x', mt_rand())]];
             }
             if (str_starts_with($path, '/docs/') && $path !== '/docs/' && mt_rand(1, 100) <= 30) {
                 $hits[] = [$time + mt_rand(20, 90), 'copy_snippet', $eventBase + ['snippet' => 'tracking-script']];

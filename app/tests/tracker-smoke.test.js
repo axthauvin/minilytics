@@ -146,6 +146,22 @@ test("tracker auto-records a pageview and custom events on the script origin", a
     assert.equal((await payload(beacons[1].body)).data.plan, "pro");
 });
 
+test("minilytics.revenue sends the amount in its reserved field, and only a positive one", async () => {
+    const { beacons, context } = loadTracker();
+
+    context.minilytics.revenue("purchase", "49.90", { currency: "EUR", order_id: "1042" });
+    assert.equal(beacons.length, 2);
+    const sent = await payload(beacons[1].body);
+    assert.equal(sent.name, "purchase");
+    assert.equal(sent.data._ml_revenue, 49.9);
+    assert.equal(sent.data.currency, "EUR");
+    assert.equal(sent.data.order_id, "1042");
+
+    context.minilytics.revenue("purchase", 0);
+    context.minilytics.revenue("purchase", "free");
+    assert.equal(beacons.length, 2, "an amount that is not positive is not sent");
+});
+
 function rejectingFetch() {
     return Promise.resolve({
         ok: false,

@@ -7,8 +7,9 @@ namespace Minilytics\Analytics\Reports;
 use Minilytics\Analytics\ReportQuery;
 
 /**
- * Money brought in by custom events carrying a `revenue` property, such as
- * `minilytics.track("purchase", { revenue: 49.9, currency: "EUR", order_id: "1042" })`.
+ * Money brought in by the events sent with
+ * `minilytics.revenue("purchase", 49.9, { currency: "EUR", order_id: "1042" })`,
+ * which store the amount as `_ml_revenue`. A plain `revenue` property is not money.
  */
 final class RevenueReport
 {
@@ -74,7 +75,7 @@ final class RevenueReport
     }
 
     /**
-     * Events with a positive `revenue` from $start to the end of the period,
+     * Events with a positive amount from $start to the end of the period,
      * oldest first, each `order_id` kept once.
      *
      * @return list<array{time: int, event: string, revenue: float, currency: string, order_id: ?string, path: string, country: string, country_code: string, session_id: string, visitor: string}>
@@ -84,7 +85,7 @@ final class RevenueReport
         $rows = $this->query->rows(
             "SELECT session_id, visitor_id, timestamp, action FROM user_activity
              WHERE timestamp >= :start AND timestamp <= :end
-               AND json_extract(action, '$.data.revenue') IS NOT NULL
+               AND json_extract(action, '$.data._ml_revenue') IS NOT NULL
                AND " . ReportQuery::NOT_INTERNAL . $this->query->condition() . '
              ORDER BY timestamp, id',
             [':start' => $start, ':end' => $this->query->period->endText()],
@@ -94,7 +95,7 @@ final class RevenueReport
         foreach ($rows as $row) {
             $action = json_decode((string) $row['action'], true);
             $data = is_array($action['data'] ?? null) ? $action['data'] : [];
-            $revenue = $data['revenue'] ?? null;
+            $revenue = $data['_ml_revenue'] ?? null;
             if (!is_numeric($revenue) || (float) $revenue <= 0 || !is_finite((float) $revenue)) {
                 continue;
             }
@@ -185,7 +186,7 @@ final class RevenueReport
             $rows = $this->query->periodRows(
                 "WITH firsts AS (SELECT session_id, action, ROW_NUMBER() OVER (PARTITION BY session_id ORDER BY timestamp, id) AS n
                  FROM user_activity WHERE json_extract(action, '$.name') = 'pageview' AND session_id IN (
-                     SELECT session_id FROM user_activity WHERE timestamp >= :start_date AND timestamp <= :end_date AND json_extract(action, '$.data.revenue') IS NOT NULL
+                     SELECT session_id FROM user_activity WHERE timestamp >= :start_date AND timestamp <= :end_date AND json_extract(action, '$.data._ml_revenue') IS NOT NULL
                  ))
                  SELECT session_id, action FROM firsts WHERE n = 1",
             );

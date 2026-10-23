@@ -15,3 +15,10 @@
 .revenue-setup a { color:#2563eb; font-size:13px; font-weight:600; text-decoration:none; }
 @media (max-width: 1050px) { .revenue-kpis { grid-template-columns:repeat(3,minmax(0,1fr)); } .revenue-kpis .event-insight { border-bottom:1px solid var(--border); } }
 @media (max-width: 700px) { .revenue-kpis { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+
+/* Purchases in the Sessions page */
+.session-revenue-badge { display:inline-flex; align-items:center; gap:4px; padding:1px 8px; border-radius:var(--radius-full); background:#ecfdf5; color:#047857; font-size:12px; font-weight:700; font-variant-numeric:tabular-nums; }
+.visit-step.is-purchase .visit-step-icon { color:#059669; background:#ecfdf5; }
+.visit-step-amount { padding:1px 8px; border-radius:var(--radius-full); background:#d1fae5; color:#065f46; font-size:12px; font-weight:700; font-variant-numeric:tabular-nums; }
+.revenue-latest-card tbody tr { cursor:pointer; }
+.revenue-latest-card tbody tr:hover td { background:#f8fafc; }
