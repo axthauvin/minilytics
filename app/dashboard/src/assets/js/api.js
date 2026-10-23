@@ -76,6 +76,15 @@ const Api = {
     if (!res.ok || data.error) throw new Error(data.error || `HTTP ${res.status}`); return data;
   },
 
+  async getRevenue(range = "7d", siteId = "", customDates = null) {
+    const params = new URLSearchParams({ range, site_id: siteId || window.App?.currentSiteId || "" });
+    const dates = customDates || window.App?.customDates;
+    if (range === "custom" && dates?.from && dates?.to) { params.append("from", dates.from); params.append("to", dates.to); }
+    window.Filters?.appendTo(params);
+    const res = await apiFetch(`${this.base}/revenue.php?${params}`); const data = await res.json();
+    if (!res.ok || data.error) throw new Error(data.error || `HTTP ${res.status}`); return data;
+  },
+
   async getEvents({
     range = "7d",
     page = 1,

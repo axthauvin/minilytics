@@ -97,6 +97,16 @@
                         <span class="nav-title">Funnels</span>
                     </a>
                 </li>
+                <li class="nav-item" data-page="revenue">
+                    <a href="#revenue">
+                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="2" y="6" width="20" height="12" rx="2"></rect>
+                            <circle cx="12" cy="12" r="2"></circle>
+                            <path d="M6 12h.01M18 12h.01"></path>
+                        </svg>
+                        <span class="nav-title">Revenue</span>
+                    </a>
+                </li>
             </ul>
 
             <?php if (empty($isGuest)): ?>

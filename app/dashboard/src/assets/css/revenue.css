@@ -1,0 +1,17 @@
+.revenue-kpis { grid-template-columns:repeat(5,minmax(0,1fr)); background:var(--bg-surface); margin:0 0 14px; }
+.revenue-kpis .event-insight-value { font-size:24px; }
+.revenue-note { margin:0 0 14px; padding:9px 12px; border:1px solid #fde68a; background:#fffbeb; border-radius:var(--radius-md); color:#92400e; font-size:12.5px; }
+.revenue-trend-card { margin-bottom:26px; }
+.revenue-card .acquisition-bar { background:#d1fae5; }
+.revenue-row-value { display:flex; flex-direction:column; align-items:flex-end; flex-shrink:0; }
+.revenue-row-value strong { color:var(--text-primary); font-size:12.5px; font-variant-numeric:tabular-nums; }
+.revenue-row-value small { color:var(--text-muted); font-size:10.5px; }
+.revenue-latest-card { margin-bottom:24px; }
+.revenue-muted { color:var(--text-muted); }
+.revenue-setup { max-width:640px; margin:12px auto 40px; padding:28px; background:var(--bg-surface); border:1px solid var(--border); border-radius:11px; box-shadow:var(--shadow-sm); }
+.revenue-setup h2 { margin:0 0 8px; font-size:17px; letter-spacing:-.01em; }
+.revenue-setup p { margin:0 0 14px; color:var(--text-secondary); font-size:13.5px; line-height:1.55; }
+.revenue-setup pre { margin:0 0 14px; padding:12px 14px; overflow-x:auto; background:#0f172a; color:#e2e8f0; border-radius:8px; font-size:12.5px; }
+.revenue-setup a { color:#2563eb; font-size:13px; font-weight:600; text-decoration:none; }
+@media (max-width: 1050px) { .revenue-kpis { grid-template-columns:repeat(3,minmax(0,1fr)); } .revenue-kpis .event-insight { border-bottom:1px solid var(--border); } }
+@media (max-width: 700px) { .revenue-kpis { grid-template-columns:repeat(2,minmax(0,1fr)); } }

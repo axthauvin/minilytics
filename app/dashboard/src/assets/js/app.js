@@ -70,6 +70,7 @@ const App = {
     EventsPage.init();
     SessionsPage.init();
     FunnelsPage.init();
+    RevenuePage.init();
 
     // Handle URL routing
     window.addEventListener("hashchange", () => this.handleRoute());
@@ -633,7 +634,7 @@ const App = {
     }
 
     // No site selected anywhere
-    if (hash === "overview" || hash === "acquisition" || hash === "sessions" || hash === "events" || hash === "funnels") {
+    if (hash === "overview" || hash === "acquisition" || hash === "sessions" || hash === "events" || hash === "funnels" || hash === "revenue") {
       try {
         const res = await Api.getSites();
         const sites = res.sites || [];
@@ -661,7 +662,7 @@ const App = {
   },
 
   navigateTo(pageName) {
-    if (!["websites", "overview", "acquisition", "events", "sessions", "funnels", "settings"].includes(pageName)) {
+    if (!["websites", "overview", "acquisition", "events", "sessions", "funnels", "revenue", "settings"].includes(pageName)) {
       pageName = "websites";
     }
 
@@ -713,6 +714,7 @@ const App = {
       events: "Events Stream",
       sessions: "User Sessions",
       funnels: "Funnels",
+      revenue: "Revenue",
       settings: "Settings",
     };
     const titleElem = document.getElementById("headerPageTitle");
@@ -737,6 +739,8 @@ const App = {
       SessionsPage.load(this.currentRange, this.currentSiteId, this.customDates);
     } else if (this.currentPage === "funnels") {
       FunnelsPage.load(this.currentRange, this.currentSiteId, this.customDates);
+    } else if (this.currentPage === "revenue") {
+      RevenuePage.load(this.currentRange, this.currentSiteId, this.customDates);
     } else if (this.currentPage === "settings") {
       SettingsPage.load();
     }

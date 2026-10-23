@@ -282,7 +282,7 @@ class MinilyticsChart {
                     <span class="chart-tooltip-dot" style="background: ${cfg.color};"></span>
                     <span class="chart-tooltip-name">${cfg.label}</span>
                     ${isAnomaly ? '<span class="chart-tooltip-anomaly" title="Unusual peak: at least 3× the median for this event">!</span>' : ''}
-                    <span class="chart-tooltip-val">${val.toLocaleString()}</span>
+                    <span class="chart-tooltip-val">${cfg.format ? cfg.format(val) : val.toLocaleString()}</span>
                 </${tag}>
             `;
         }).join('');
