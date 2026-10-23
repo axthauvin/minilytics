@@ -19,7 +19,7 @@
         <div><span class="chart-eyebrow">REVENUE TREND</span></div>
       </div>
       <div class="canvas-wrapper">
-        <canvas id="revenueTrendChart" class="chart-canvas"></canvas>
+        <div id="revenueTrendChart" class="chart-canvas"></div>
         <div id="revenueTrendTooltip" class="chart-tooltip"></div>
       </div>
     </div>

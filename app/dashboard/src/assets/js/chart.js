@@ -1,21 +1,23 @@
 /**
- * Minilytics Smooth Multi-Series Canvas Area Chart Engine
+ * Minilytics time-series chart, drawn by Apache ECharts.
  * Renders time-series data as a line/area chart or vertical bars.
  * Features:
- * - Smooth Bézier curves for all active series
+ * - Smooth curves with a gradient fill for all active series
  * - Cohesive shared Y-axis scaling
  * - Multi-series synchronized crosshair and anchor dots
- * - Rich unified hover tooltip with color badges
+ * - Rich unified hover tooltip with color badges (our own HTML, so it can be pinned and clicked)
  * - Toggleable series visibility
  */
 
-class MinilyticsChart {
-    constructor(canvasId, tooltipId, options = {}) {
-        this.canvas = document.getElementById(canvasId);
-        this.tooltip = document.getElementById(tooltipId);
-        if (!this.canvas) return;
+const CHART_FONT = 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
 
-        this.ctx = this.canvas.getContext('2d');
+class MinilyticsChart {
+    constructor(containerId, tooltipId, options = {}) {
+        this.container = document.getElementById(containerId);
+        this.tooltip = document.getElementById(tooltipId);
+        if (!this.container || !window.echarts) return;
+
+        this.chart = echarts.init(this.container, null, { renderer: 'svg' });
         this.data = [];
         this.hoveredIndex = -1;
         this.lockedIndex = null;
@@ -45,7 +47,7 @@ class MinilyticsChart {
                 color: '#60a5fa', // Light blue
                 gradientStart: 'rgba(147, 197, 253, 0.5)',
                 gradientEnd: 'rgba(191, 219, 254, 0.06)',
-                lineWidth: 3.25
+                lineWidth: 2.5
             },
             visitors: {
                 key: 'visitors',
@@ -54,7 +56,7 @@ class MinilyticsChart {
                 color: '#a78bfa', // Light violet
                 gradientStart: 'rgba(196, 181, 253, 0.42)',
                 gradientEnd: 'rgba(221, 214, 254, 0.05)',
-                lineWidth: 3
+                lineWidth: 2.25
             },
             sessions: {
                 key: 'sessions',
@@ -72,15 +74,13 @@ class MinilyticsChart {
                 color: '#f59e0b', // Amber / Orange
                 gradientStart: 'rgba(245, 158, 11, 0.20)',
                 gradientEnd: 'rgba(245, 158, 11, 0.00)',
-                lineWidth: 2.5
+                lineWidth: 2.25
             }
         };
 
         this.seriesConfig = Object.assign({}, defaultSeriesConfig, options.seriesConfig || {});
         const initialSeries = options.activeSeries || (options.seriesConfig ? Object.keys(options.seriesConfig) : ['pageviews', 'visitors', 'sessions']);
         this.activeSeries = new Set(initialSeries.filter(k => this.seriesConfig[k]));
-
-        this.padding = { top: 25, right: 20, bottom: 32, left: 36 };
 
         if (this.tooltip && this.onTooltipMetricClick) {
             this.tooltip.classList.add('is-interactive');
@@ -89,7 +89,8 @@ class MinilyticsChart {
         }
 
         this.initEvents();
-        window.addEventListener('resize', () => this.resize());
+        // Pages start hidden: the chart gets its real size once its tab is shown.
+        new ResizeObserver(() => this.resize()).observe(this.container);
     }
 
     setData(data, activeSeries = null) {
@@ -102,7 +103,7 @@ class MinilyticsChart {
         if (this.tooltip) {
             this.tooltip.classList.remove('visible');
         }
-        this.resize();
+        this.draw();
     }
 
     toggleSeries(seriesKey) {
@@ -149,44 +150,32 @@ class MinilyticsChart {
     }
 
     resize() {
-        if (!this.canvas) return;
-        const rect = this.canvas.getBoundingClientRect();
-        this.dpr = window.devicePixelRatio || 1;
-        
-        this.width = rect.width;
-        this.height = rect.height;
-
-        this.canvas.width = Math.round(this.width * this.dpr);
-        this.canvas.height = Math.round(this.height * this.dpr);
-
-        this.ctx.resetTransform();
-        this.ctx.scale(this.dpr, this.dpr);
-
-        this.draw();
+        if (!this.chart) return;
+        this.chart.resize();
     }
 
     initEvents() {
-        if (!this.canvas) return;
-
-        this.canvas.addEventListener('mousemove', (e) => {
-            const rect = this.canvas.getBoundingClientRect();
-            const mouseX = e.clientX - rect.left;
-            const mouseY = e.clientY - rect.top;
-
-            this.handleHover(mouseX, mouseY);
+        // The built-in tooltip only drives the crosshair: ours is HTML so it can be pinned and clicked.
+        this.chart.on('updateAxisPointer', (event) => {
+            if (this.lockedIndex !== null) return;
+            const index = event.axesInfo?.[0]?.value;
+            if (!Number.isInteger(index) || !this.data[index]) return;
+            clearTimeout(this.tooltipHideTimer);
+            this.hoveredIndex = index;
+            this.updateTooltip(index);
         });
 
-        this.canvas.addEventListener('click', (e) => {
+        const zr = this.chart.getZr();
+        zr.on('click', (e) => {
             if (!this.data?.length) return;
-            const rect = this.canvas.getBoundingClientRect();
-            const index = this.getIndexAtX(e.clientX - rect.left);
+            const index = this.getIndexAtPixel(e.offsetX);
             const item = this.data[index];
             if (!item) return;
             if (this.lockTooltipOnClick) this.lockTooltip(index);
             else if (this.onPointClick) this.onPointClick(item, index);
         });
 
-        this.canvas.addEventListener('mouseleave', () => {
+        zr.on('globalout', () => {
             if (this.lockedIndex !== null) return;
             if (this.onTooltipMetricClick) {
                 clearTimeout(this.tooltipHideTimer);
@@ -195,14 +184,13 @@ class MinilyticsChart {
                 this.hideTooltip();
             }
         });
-
     }
 
     hideTooltip() {
         if (this.lockedIndex !== null) return;
         this.hoveredIndex = -1;
         if (this.tooltip) this.tooltip.classList.remove('visible');
-        this.draw();
+        this.chart?.dispatchAction({ type: 'hideTip' });
     }
 
     lockTooltip(index) {
@@ -210,7 +198,9 @@ class MinilyticsChart {
         clearTimeout(this.tooltipHideTimer);
         this.lockedIndex = index;
         this.hoveredIndex = index;
-        this.draw();
+        // Keep the crosshair on the pinned point while the mouse moves elsewhere.
+        this.chart.setOption({ tooltip: { triggerOn: 'none' } });
+        this.chart.dispatchAction({ type: 'showTip', seriesIndex: 0, dataIndex: index });
         this.updateTooltip(index);
     }
 
@@ -218,7 +208,8 @@ class MinilyticsChart {
         this.lockedIndex = null;
         this.hoveredIndex = -1;
         if (this.tooltip) this.tooltip.classList.remove('visible');
-        this.draw();
+        this.chart.setOption({ tooltip: { triggerOn: 'mousemove|click' } });
+        this.chart.dispatchAction({ type: 'hideTip' });
     }
 
     isAnomalousPoint(seriesKey, value, index) {
@@ -235,24 +226,39 @@ class MinilyticsChart {
         return value >= median * 3;
     }
 
-    handleHover(mouseX, mouseY) {
-        if (!this.data || this.data.length === 0) return;
-        if (this.lockedIndex !== null) return;
-
-        const index = this.getIndexAtX(mouseX);
-
-        this.hoveredIndex = index;
-        this.draw();
-        this.updateTooltip(index);
+    /** The nearest point to a horizontal position, between the first and last points' positions. */
+    getIndexAtPixel(x) {
+        const last = this.data.length - 1;
+        if (last < 1) return 0;
+        const first = this.chart.convertToPixel({ xAxisIndex: 0 }, 0);
+        const end = this.chart.convertToPixel({ xAxisIndex: 0 }, last);
+        const index = Math.round(((x - first) / (end - first)) * last);
+        return Math.max(0, Math.min(last, index));
     }
 
-    getIndexAtX(mouseX) {
-        const plotWidth = this.width - this.padding.left - this.padding.right;
-        const relativeX = mouseX - this.padding.left;
-        const rawIndex = this.chartType === 'bar'
-            ? Math.floor(relativeX / (plotWidth / this.data.length))
-            : Math.round(relativeX / (plotWidth / Math.max(1, this.data.length - 1)));
-        return Math.max(0, Math.min(this.data.length - 1, rawIndex));
+    /** Series to draw, background first: visitors are a subset of views, so they go in front. */
+    renderOrder() {
+        const preferredOrder = ['pageviews', 'events', 'sessions', 'visitors'];
+        const order = preferredOrder.filter(k => this.activeSeries.has(k) && this.seriesConfig[k]);
+        Object.keys(this.seriesConfig).forEach(k => {
+            if (this.activeSeries.has(k) && !order.includes(k)) order.push(k);
+        });
+        return order;
+    }
+
+    /** About `gridLines` steps of 1, 2, 2.5 or 5 × 10ⁿ, so that grid lines fall on round counts. */
+    scale() {
+        const values = [];
+        this.activeSeries.forEach(k => {
+            this.data.forEach(d => values.push(Number(d[k]) || 0));
+        });
+        const maxVal = Math.max(...values, this.minScale);
+        const raw = maxVal / this.gridLines;
+        const magnitude = 10 ** Math.floor(Math.log10(raw));
+        // Counts are whole numbers: no 2.5 step below 10.
+        const factors = magnitude >= 10 ? [1, 2, 2.5, 5, 10] : [1, 2, 5, 10];
+        const step = Math.max(1, factors.find(f => f * magnitude >= raw) * magnitude);
+        return { max: Math.ceil(maxVal / step) * step, step };
     }
 
     updateTooltip(index) {
@@ -268,7 +274,7 @@ class MinilyticsChart {
                 return difference || this.seriesConfig[left].label.localeCompare(this.seriesConfig[right].label);
             });
         }
-        
+
         const visibleSeriesKeys = this.hideZeroTooltipMetrics
             ? seriesKeys.filter(key => (Number(item[key]) || 0) > 0)
             : seriesKeys;
@@ -304,38 +310,22 @@ class MinilyticsChart {
         this.tooltip.querySelector('[data-tooltip-action="sessions"]')?.addEventListener('click', () => this.onPointClick(item, index));
         this.tooltip.querySelector('[data-tooltip-action="unpin"]')?.addEventListener('click', () => this.unlockTooltip());
 
-        const plotY = this.padding.top;
-        const plotWidth = this.width - this.padding.left - this.padding.right;
-        const plotHeight = this.height - this.padding.top - this.padding.bottom;
-        const stepX = plotWidth / Math.max(1, this.data.length - 1);
-        const pointX = this.chartType === 'bar'
-            ? this.padding.left + (index + 0.5) * (plotWidth / this.data.length)
-            : this.padding.left + index * stepX;
-
-        // Find max value across all active series to place tooltip
-        const allActiveValues = [];
-        this.activeSeries.forEach(k => {
-            this.data.forEach(d => allActiveValues.push(Number(d[k]) || 0));
-        });
-        let maxVal = Math.max(...allActiveValues, this.minScale);
-        const roundStep = maxVal > 100 ? 50 : (maxVal > 50 ? 20 : (maxVal > 20 ? 10 : 4));
-        maxVal = Math.ceil(maxVal / roundStep) * roundStep;
-
-        // Use highest point among active series at this index
-        const currentIndexValues = seriesKeys.map(k => Number(item[k]) || 0);
-        const topValAtIndex = Math.max(...currentIndexValues, 0);
-        const pointY = plotY + plotHeight - (topValAtIndex / maxVal) * plotHeight;
+        // Place it beside the highest point among active series at this index.
+        const topValAtIndex = Math.max(...seriesKeys.map(k => Number(item[k]) || 0), 0);
+        const [pointX, pointY] = this.chart.convertToPixel({ gridIndex: 0 }, [index, topValAtIndex]);
+        const width = this.container.clientWidth;
+        const height = this.container.clientHeight;
 
         // Keep the tooltip beside the selected point. The left-side fallback
         // prevents it from being clipped for the final points in the chart.
         const gap = 14;
         const tooltipWidth = this.tooltip.offsetWidth;
         const tooltipHeight = this.tooltip.offsetHeight;
-        const canOpenRight = pointX + gap + tooltipWidth <= this.width - 4;
+        const canOpenRight = pointX + gap + tooltipWidth <= width - 4;
         const left = canOpenRight
             ? pointX + gap
             : Math.max(4, pointX - gap - tooltipWidth);
-        const top = Math.max(4, Math.min(pointY - tooltipHeight / 2, this.height - tooltipHeight - 4));
+        const top = Math.max(4, Math.min(pointY - tooltipHeight / 2, height - tooltipHeight - 4));
         this.tooltip.style.left = `${left}px`;
         this.tooltip.style.top = `${top}px`;
         this.tooltip.style.transform = 'none';
@@ -343,202 +333,113 @@ class MinilyticsChart {
         this.tooltip.classList.add('visible');
     }
 
-    draw() {
-        if (!this.ctx || !this.width || !this.height) return;
-        const ctx = this.ctx;
-        ctx.clearRect(0, 0, this.width, this.height);
-
-        if (!this.data || this.data.length === 0) {
-            ctx.fillStyle = '#94a3b8';
-            ctx.font = '13px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText('No data available for this period', this.width / 2, this.height / 2);
-            return;
-        }
-
-        const plotX = this.padding.left;
-        const plotY = this.padding.top;
-        const plotWidth = this.width - this.padding.left - this.padding.right;
-        const plotHeight = this.height - this.padding.top - this.padding.bottom;
-
-        // 1. Determine common Y-axis maximum across all active series
-        const allActiveValues = [];
-        this.activeSeries.forEach(k => {
-            this.data.forEach(d => allActiveValues.push(Number(d[k]) || 0));
-        });
-
-        let maxVal = Math.max(...allActiveValues, this.minScale);
-        const roundStep = maxVal > 100 ? 50 : (maxVal > 50 ? 20 : (maxVal > 20 ? 10 : 4));
-        maxVal = Math.ceil(maxVal / roundStep) * roundStep;
-
-        const getY = (val) => {
-            return plotY + plotHeight - (val / maxVal) * plotHeight;
+    lineSeries(key, z) {
+        const cfg = this.seriesConfig[key];
+        const values = this.data.map(item => Number(item[key]) || 0);
+        const last = values.length - 1;
+        const dot = { color: '#ffffff', borderColor: cfg.color, borderWidth: 2.5 };
+        return {
+            name: cfg.label,
+            type: 'line',
+            z,
+            data: values,
+            smooth: 0.3,
+            // Stay above the floor between two points, as counts never go below zero.
+            smoothMonotone: 'x',
+            showSymbol: false,
+            symbol: 'circle',
+            symbolSize: 9,
+            itemStyle: dot,
+            lineStyle: { color: cfg.color, width: cfg.lineWidth, cap: 'round', join: 'round' },
+            areaStyle: {
+                color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                    { offset: 0, color: cfg.gradientStart },
+                    { offset: 0.7, color: cfg.gradientEnd },
+                    { offset: 1, color: 'rgba(255, 255, 255, 0)' },
+                ]),
+            },
+            emphasis: { disabled: true },
+            markPoint: this.markLastPoint && values.length > 3 ? {
+                silent: true,
+                symbol: 'circle',
+                symbolSize: 9,
+                itemStyle: dot,
+                label: { show: false },
+                animation: false,
+                data: [{ coord: [last, values[last]] }],
+            } : undefined,
         };
+    }
 
-        const stepX = plotWidth / Math.max(1, this.data.length - 1);
+    barSeries(key, z) {
+        const cfg = this.seriesConfig[key];
+        return {
+            name: cfg.label,
+            type: 'bar',
+            z,
+            data: this.data.map(item => Number(item[key]) || 0),
+            // Metrics share a single slot, drawn on top of each other.
+            barGap: '-100%',
+            barCategoryGap: '28%',
+            barMaxWidth: 96,
+            itemStyle: { color: cfg.color, borderRadius: [4, 4, 0, 0] },
+            emphasis: { disabled: true },
+        };
+    }
 
-        // 2. Subtle horizontal grid lines & Y-axis numbers
-        const gridLines = this.gridLines;
-        ctx.save();
-        ctx.setLineDash(this.gridDash);
-        ctx.strokeStyle = this.gridDash.length ? '#e2e8f0' : '#f1f5f9';
-        ctx.lineWidth = 1;
-        ctx.fillStyle = '#94a3b8';
-        ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-        ctx.textAlign = 'right';
-        ctx.textBaseline = 'middle';
+    draw() {
+        if (!this.chart) return;
+        const isBar = this.chartType === 'bar';
+        const isEmpty = !this.data || this.data.length === 0;
+        const { max, step } = this.scale();
+        const axisText = { color: '#94a3b8', fontSize: 11, fontFamily: CHART_FONT };
 
-        for (let i = 0; i <= gridLines; i++) {
-            const val = Math.round((maxVal / gridLines) * i);
-            const y = getY(val);
-
-            ctx.beginPath();
-            ctx.moveTo(plotX, y);
-            ctx.lineTo(plotX + plotWidth, y);
-            ctx.stroke();
-
-            ctx.fillText(val.toLocaleString(), plotX - 8, y);
-        }
-        ctx.restore();
-
-        // 3. Draw dashed vertical crosshair if hovering
-        const activeIdx = this.hoveredIndex >= 0 ? this.hoveredIndex : (this.markLastPoint && this.data.length > 3 ? this.data.length - 1 : -1);
-        if (activeIdx >= 0 && activeIdx < this.data.length && this.hoveredIndex >= 0) {
-            const crosshairX = this.chartType === 'bar'
-                ? plotX + (activeIdx + 0.5) * (plotWidth / this.data.length)
-                : plotX + activeIdx * stepX;
-            ctx.save();
-            ctx.beginPath();
-            ctx.setLineDash([3, 3]);
-            ctx.strokeStyle = '#94a3b8';
-            ctx.lineWidth = 1;
-            ctx.moveTo(crosshairX, plotY);
-            ctx.lineTo(crosshairX, plotY + plotHeight);
-            ctx.stroke();
-            ctx.restore();
-        }
-
-        // 4. Render each active series (in background-to-foreground order)
-        const preferredOrder = ['pageviews', 'events', 'sessions', 'visitors'];
-        const renderOrder = preferredOrder.filter(k => this.activeSeries.has(k) && this.seriesConfig[k]);
-        Object.keys(this.seriesConfig).forEach(k => {
-            if (this.activeSeries.has(k) && !renderOrder.includes(k)) renderOrder.push(k);
-        });
-
-        if (this.chartType === 'bar') {
-            const slotWidth = plotWidth / this.data.length;
-            // Metrics share a single slot. Since visitors are a subset of views,
-            // drawing them last makes the smaller visitor bar visible in front.
-            const barWidth = Math.max(1, Math.min(slotWidth * 0.72, 96));
-
-            renderOrder.forEach((key) => {
-                const cfg = this.seriesConfig[key];
-                this.data.forEach((item, index) => {
-                    const value = Number(item[key]) || 0;
-                    const x = plotX + index * slotWidth + (slotWidth - barWidth) / 2;
-                    const y = getY(value);
-                    const height = Math.max(0, plotY + plotHeight - y);
-                    if (height === 0) return;
-                    ctx.fillStyle = cfg.color;
-                    ctx.beginPath();
-                    ctx.roundRect(x, y, barWidth, height, [3, 3, 0, 0]);
-                    ctx.fill();
-                });
-            });
-        } else renderOrder.forEach(key => {
-            const cfg = this.seriesConfig[key];
-            const points = this.data.map((item, i) => ({
-                x: plotX + i * stepX,
-                y: getY(Number(item[key]) || 0),
-                val: Number(item[key]) || 0
-            }));
-
-            if (points.length <= 1) return;
-
-            // A. Smooth Area Gradient Fill
-            const gradient = ctx.createLinearGradient(0, plotY, 0, plotY + plotHeight);
-            gradient.addColorStop(0, cfg.gradientStart);
-            gradient.addColorStop(0.7, cfg.gradientEnd);
-            gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
-
-            ctx.beginPath();
-            ctx.moveTo(points[0].x, plotY + plotHeight);
-            ctx.lineTo(points[0].x, points[0].y);
-
-            const floorY = plotY + plotHeight;
-            for (let i = 0; i < points.length - 1; i++) {
-                const p0 = points[i === 0 ? 0 : i - 1];
-                const p1 = points[i];
-                const p2 = points[i + 1];
-                const p3 = points[i + 2] || p2;
-
-                const cp1x = p1.x + (p2.x - p0.x) / 6;
-                const cp1y = Math.min(p1.y + (p2.y - p0.y) / 6, floorY);
-                const cp2x = p2.x - (p3.x - p1.x) / 6;
-                const cp2y = Math.min(p2.y - (p3.y - p1.y) / 6, floorY);
-
-                ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
-            }
-
-            ctx.lineTo(points[points.length - 1].x, plotY + plotHeight);
-            ctx.closePath();
-            ctx.fillStyle = gradient;
-            ctx.fill();
-
-            // B. Smooth Bézier Curve Stroke
-            ctx.beginPath();
-            ctx.moveTo(points[0].x, points[0].y);
-
-            for (let i = 0; i < points.length - 1; i++) {
-                const p0 = points[i === 0 ? 0 : i - 1];
-                const p1 = points[i];
-                const p2 = points[i + 1];
-                const p3 = points[i + 2] || p2;
-
-                const cp1x = p1.x + (p2.x - p0.x) / 6;
-                const cp1y = Math.min(p1.y + (p2.y - p0.y) / 6, floorY);
-                const cp2x = p2.x - (p3.x - p1.x) / 6;
-                const cp2y = Math.min(p2.y - (p3.y - p1.y) / 6, floorY);
-
-                ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
-            }
-
-            ctx.strokeStyle = cfg.color;
-            ctx.lineWidth = cfg.lineWidth;
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
-            ctx.stroke();
-
-            // C. Anchor Dot on active point for this series
-            if (activeIdx >= 0 && activeIdx < points.length) {
-                const pt = points[activeIdx];
-                ctx.beginPath();
-                ctx.arc(pt.x, pt.y, 4.5, 0, Math.PI * 2);
-                ctx.fillStyle = '#ffffff';
-                ctx.fill();
-                ctx.lineWidth = 2.5;
-                ctx.strokeStyle = cfg.color;
-                ctx.stroke();
-            }
-        });
-
-        // 5. X-axis Labels (Dates / Time steps)
-        ctx.fillStyle = '#94a3b8';
-        ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'top';
-
-        const maxLabels = this.width < 420 ? 3 : (this.width < 640 ? 5 : 7);
-        const labelInterval = Math.max(1, Math.floor(this.data.length / maxLabels));
-        for (let i = 0; i < this.data.length; i += labelInterval) {
-            const ptX = this.chartType === 'bar'
-                ? plotX + (i + 0.5) * (plotWidth / this.data.length)
-                : plotX + i * stepX;
-            const label = this.data[i].label || '';
-            // Keep the first and last labels inside the canvas.
-            const half = ctx.measureText(label).width / 2;
-            ctx.fillText(label, Math.min(Math.max(ptX, half + 2), this.width - half - 2), plotY + plotHeight + 10);
-        }
+        this.chart.setOption({
+            animationDuration: 500,
+            animationDurationUpdate: 300,
+            textStyle: { fontFamily: CHART_FONT },
+            grid: { left: 8, right: 16, top: 16, bottom: 4, containLabel: true },
+            title: {
+                show: isEmpty,
+                text: 'No data available for this period',
+                left: 'center',
+                top: 'middle',
+                textStyle: { color: '#94a3b8', fontSize: 13, fontWeight: 'normal', fontFamily: CHART_FONT },
+            },
+            tooltip: {
+                show: !isEmpty,
+                trigger: 'axis',
+                showContent: false,
+                triggerOn: this.lockedIndex === null ? 'mousemove|click' : 'none',
+                axisPointer: isBar
+                    ? { type: 'shadow', shadowStyle: { color: 'rgba(148, 163, 184, 0.12)' } }
+                    : { type: 'line', lineStyle: { color: '#94a3b8', width: 1, type: [3, 3] } },
+            },
+            xAxis: {
+                type: 'category',
+                data: this.data.map(item => item.label || ''),
+                boundaryGap: isBar,
+                show: !isEmpty,
+                axisLine: { lineStyle: { color: '#e2e8f0' } },
+                axisTick: { show: false },
+                axisLabel: { ...axisText, margin: 10, hideOverlap: true },
+            },
+            yAxis: {
+                type: 'value',
+                min: 0,
+                max,
+                interval: step,
+                show: !isEmpty,
+                axisLabel: { ...axisText, formatter: (value) => Math.round(value).toLocaleString() },
+                splitLine: {
+                    lineStyle: {
+                        color: this.gridDash.length ? '#e2e8f0' : '#f1f5f9',
+                        type: this.gridDash.length ? this.gridDash : 'solid',
+                    },
+                },
+            },
+            series: isEmpty ? [] : this.renderOrder().map((key, i) => (isBar ? this.barSeries(key, i + 2) : this.lineSeries(key, i + 2))),
+        }, { notMerge: true });
     }
 
 }

@@ -31,7 +31,7 @@
             </div>
         </div>
         <div class="canvas-wrapper">
-            <canvas id="eventsTrendChart" class="chart-canvas"></canvas>
+            <div id="eventsTrendChart" class="chart-canvas"></div>
             <div id="eventsTrendTooltip" class="chart-tooltip"></div>
         </div>
     </div>
