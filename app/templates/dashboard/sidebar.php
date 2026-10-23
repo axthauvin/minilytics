@@ -6,8 +6,8 @@
                 <img src="/dashboard/src/assets/logo.svg" class="sidebar-brand-icon" width="28" height="28" alt="Minilytics Logo">
                 <span class="sidebar-brand-text">Minilytics</span>
             </a>
-            <button type="button" class="btn-sidebar-collapse" id="btnSidebarCollapse" title="Réduire la navigation (Ctrl+B)" aria-label="Réduire la navigation">
-                <svg class="icon-collapse-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <button type="button" class="btn-sidebar-collapse" id="btnSidebarCollapse" title="Collapse navigation (Ctrl+B)" aria-label="Collapse navigation" aria-controls="sidebar" aria-expanded="true">
+                <svg class="icon-collapse-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <polyline points="15 18 9 12 15 6"></polyline>
                 </svg>
             </button>
@@ -45,11 +45,9 @@
             </div>
         </div>
 
-        <div class="nav-section-label">Analytics</div>
-
-        <!-- Navigation with Icons + Text Titles -->
-        <nav class="sidebar-nav">
-            <ul class="nav-list">
+        <nav class="sidebar-nav" aria-label="Website analytics">
+            <h2 class="nav-section-label" id="navLabelAnalytics">Analytics</h2>
+            <ul class="nav-list" aria-labelledby="navLabelAnalytics">
                 <!-- 1. Overview -->
                 <li class="nav-item active" data-page="overview">
                     <a href="#overview">
@@ -100,25 +98,23 @@
                     </a>
                 </li>
             </ul>
-        </nav>
 
-        <?php if (empty($isGuest)): ?>
-        <div class="nav-section-label">Data Ingestion</div>
-        <nav class="sidebar-nav">
-            <ul class="nav-list">
+            <?php if (empty($isGuest)): ?>
+            <h2 class="nav-section-label" id="navLabelIngestion">Data Ingestion</h2>
+            <ul class="nav-list" aria-labelledby="navLabelIngestion">
                 <li class="nav-item">
-                    <a href="javascript:void(0)" id="btnSidebarImport" title="Import from Umami, GA4, Plausible...">
+                    <button type="button" id="btnSidebarImport" title="Import from Umami, GA4, Plausible...">
                         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                             <polyline points="17 8 12 3 7 8" />
                             <line x1="12" y1="3" x2="12" y2="15" />
                         </svg>
                         <span class="nav-title">Import Data</span>
-                    </a>
+                    </button>
                 </li>
             </ul>
+            <?php endif; ?>
         </nav>
-        <?php endif; ?>
     </div>
 
     <!-- Bottom Actions -->

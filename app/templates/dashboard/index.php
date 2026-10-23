@@ -41,12 +41,16 @@ use Minilytics\Http\View;
         window.MINILYTICS_PUBLIC_SITE = <?php echo $isGuest ? json_encode($publicSite['id']) : 'null'; ?>;
     </script>
     <script>
+        // Same rule as App.bindSidebarCollapse(), applied before the first paint.
         (function() {
+            var collapsed = false;
             try {
-                if (localStorage.getItem('minilytics_sidebar_collapsed') === 'true') {
-                    document.documentElement.classList.add('sidebar-preload-collapsed');
-                }
+                collapsed = localStorage.getItem('minilytics_sidebar_collapsed') === 'true';
             } catch (e) {}
+            if (window.matchMedia('(min-width: 768px) and (max-width: 1099px)').matches
+                || (collapsed && window.matchMedia('(min-width: 1100px)').matches)) {
+                document.documentElement.classList.add('nav-compact');
+            }
         })();
     </script>
 </head>
@@ -57,7 +61,7 @@ use Minilytics\Http\View;
     <div class="app-container">
         <!-- Left Sidebar Navigation -->
         <?php include View::path('dashboard/sidebar'); ?>
-        <button type="button" class="mobile-nav-backdrop" id="mobileNavBackdrop" aria-label="Close navigation" tabindex="-1"></button>
+        <div class="mobile-nav-backdrop" id="mobileNavBackdrop" aria-hidden="true"></div>
 
         <!-- Main Content Area -->
         <div class="main-wrapper">
@@ -111,7 +115,7 @@ use Minilytics\Http\View;
                 <?php include View::path('dashboard/pages/funnels'); ?>
                 <?php include View::path('dashboard/pages/settings'); ?>
             </main>
-            <p style="margin: 0 32px 20px; font-size: 11px; color: var(--text-muted);">This product includes GeoLite2 data created by MaxMind, available from <a href="https://www.maxmind.com" target="_blank" rel="noopener noreferrer" style="color: inherit;">https://www.maxmind.com</a></p>
+            <p class="app-footnote">This product includes GeoLite2 data created by MaxMind, available from <a href="https://www.maxmind.com" target="_blank" rel="noopener noreferrer">https://www.maxmind.com</a></p>
         </div>
     </div>
 

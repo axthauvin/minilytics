@@ -1,8 +1,8 @@
 <!-- Top Header Component (Minimalist Analytics Header) -->
 <header class="top-header">
     <div class="header-left">
-        <button type="button" class="btn-sidebar-toggle-header" id="btnHeaderSidebarToggle" title="Open navigation" aria-label="Open navigation" aria-expanded="false" aria-controls="sidebar">
-            <svg class="header-toggle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <button type="button" class="btn-sidebar-toggle-header" id="btnHeaderSidebarToggle" aria-label="Open navigation" aria-expanded="false" aria-controls="sidebar">
+            <svg class="header-toggle-icon" width="18" height="18" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
                 <path d="M4 7h16M4 12h16M4 17h16"></path>
             </svg>
         </button>
@@ -66,7 +66,7 @@
         </div>
 
         <!-- Refresh Button -->
-        <button type="button" class="btn-icon" id="btnRefresh" title="Refresh metrics from database">
+        <button type="button" class="btn-icon" id="btnRefresh" title="Refresh metrics from database" aria-label="Refresh">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path>
             </svg>
